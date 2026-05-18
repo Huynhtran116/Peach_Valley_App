@@ -118,7 +118,7 @@ class _OnboardingPageState extends State<OnboardingPage>
 
                   // Slogan
                   const Text(
-                    "Nơi bình yên tìm về",
+                    "Thượng lưu thầm lặng",
                     style: TextStyle(
                       fontSize: 14,
                       color: Color(0xFFC97A3E),

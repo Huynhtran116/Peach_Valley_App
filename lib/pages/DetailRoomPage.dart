@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import '../models/loai_phong.dart';
+import '../services/cart_service.dart';
+import '../utils/number_parser.dart';
 import 'BookingDetail.dart';
+import 'SearchPage.dart';
 
 class RoomDetailPage extends StatefulWidget {
   final LoaiPhong loaiPhong;
+  final int? soPhongTrongTheoNgay; // 🔥 Từ SearchPage (số phòng trống theo ngày)
+  final bool fromHome;
 
-  const RoomDetailPage({super.key, required this.loaiPhong});
+  const RoomDetailPage({
+    super.key,
+    required this.loaiPhong,
+    this.soPhongTrongTheoNgay,
+    this.fromHome = false,
+  });
 
   @override
   State<RoomDetailPage> createState() => _RoomDetailPageState();
@@ -15,16 +25,96 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   int _currentImageIndex = 0;
   late PageController _pageController;
 
+  late int soLuongDat;
+  late int soPhongTrong;
+  bool isLoading = true;
+
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _initData();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _initData() async {
+    // 🔥 Lấy số phòng trống phù hợp
+    if (widget.soPhongTrongTheoNgay != null) {
+      // Từ SearchPage - số phòng trống theo ngày
+      soPhongTrong = widget.soPhongTrongTheoNgay!;
+    } else {
+      // Từ HomePage - tổng số phòng trống
+      soPhongTrong = widget.loaiPhong.soPhongTrong;
+    }
+
+    await _loadCurrentQuantity();
+    setState(() {
+      isLoading = false;
+    });
+  }
+
+  // Load số lượng hiện tại từ giỏ hàng
+  Future<void> _loadCurrentQuantity() async {
+    final cart = await CartService.loadCart();
+    final maLoai = widget.loaiPhong.maLoaiPhong;
+    setState(() {
+      soLuongDat = cart[maLoai]?['quantity'] ?? 0;
+    });
+  }
+
+  // Cập nhật giỏ hàng
+  Future<void> _updateCart(int newQuantity) async {
+    final cart = await CartService.loadCart();
+    final maLoai = widget.loaiPhong.maLoaiPhong;
+
+    if (newQuantity > 0) {
+      cart[maLoai] = {
+        'MaLoaiPhong': maLoai,
+        'TenLoaiPhong': widget.loaiPhong.tenLoaiPhong,
+        'gia': widget.loaiPhong.giaHienThi,
+        'hinhs': widget.loaiPhong.hinhs.map((e) => {'Url': e.url}).toList(),
+        'NguoiLon': widget.loaiPhong.nguoiLon,
+        'TreEm': widget.loaiPhong.treEm,
+        'soPhongTrong': soPhongTrong,
+        'quantity': newQuantity,
+      };
+    } else {
+      cart.remove(maLoai);
+    }
+
+    await CartService.saveCart(cart);
+  }
+
+  // Thêm phòng
+  Future<void> _themPhong() async {
+    if (soLuongDat < soPhongTrong) {
+      setState(() {
+        soLuongDat++;
+      });
+      await _updateCart(soLuongDat);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Chỉ còn $soPhongTrong phòng trống'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Giảm phòng
+  Future<void> _giamPhong() async {
+    if (soLuongDat > 0) {
+      setState(() {
+        soLuongDat--;
+      });
+      await _updateCart(soLuongDat);
+    }
   }
 
   // Hàm hiển thị ảnh toàn màn hình
@@ -36,7 +126,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
         insetPadding: EdgeInsets.zero,
         child: Stack(
           children: [
-            // Ảnh toàn màn hình
             InteractiveViewer(
               minScale: 0.5,
               maxScale: 4.0,
@@ -55,7 +144,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                 },
               ),
             ),
-            // Nút đóng
             Positioned(
               top: 40,
               right: 20,
@@ -71,7 +159,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                 ),
               ),
             ),
-            // Chỉ báo trang
             Positioned(
               bottom: 20,
               left: 0,
@@ -101,6 +188,12 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     final List<String> imageUrls = widget.loaiPhong.hinhs.map((h) => h.url).toList();
     final bool hasMultipleImages = imageUrls.length > 1;
 
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFC97A3E))),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFFFFF),
       appBar: AppBar(
@@ -108,7 +201,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, true),
         ),
         centerTitle: true,
         title: Text(
@@ -129,10 +222,9 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🔥 SLIDESHOW ẢNH CHÍNH
+                    // Slideshow ảnh chính
                     Stack(
                       children: [
-                        // PageView để vuốt chuyển ảnh
                         SizedBox(
                           height: 250,
                           child: PageView.builder(
@@ -169,8 +261,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                             },
                           ),
                         ),
-
-                        // Chỉ báo số ảnh (nếu có nhiều ảnh)
                         if (hasMultipleImages)
                           Positioned(
                             bottom: 10,
@@ -187,8 +277,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                               ),
                             ),
                           ),
-
-                        // Nút chuyển ảnh trái (nếu có nhiều ảnh)
                         if (hasMultipleImages)
                           Positioned(
                             left: 10,
@@ -212,8 +300,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                               ),
                             ),
                           ),
-
-                        // Nút chuyển ảnh phải (nếu có nhiều ảnh)
                         if (hasMultipleImages)
                           Positioned(
                             right: 10,
@@ -237,8 +323,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                               ),
                             ),
                           ),
-
-                        // Nút yêu thích (tim)
                         Positioned(
                           top: 10,
                           right: 10,
@@ -251,8 +335,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                             child: const Icon(Icons.favorite, color: Colors.red),
                           ),
                         ),
-
-                        // Dấu chấm chỉ vị trí (nếu có nhiều ảnh)
                         if (hasMultipleImages)
                           Positioned(
                             bottom: 10,
@@ -281,7 +363,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
                     const SizedBox(height: 15),
 
-                    // 🔥 Tiện nghi
+                    // Tiện nghi
                     if (widget.loaiPhong.tienNghis.isNotEmpty)
                       Wrap(
                         spacing: 8,
@@ -293,9 +375,10 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
                     const SizedBox(height: 20),
 
-                    // 🔥 Tên + Giá
+                    // Tên + Giá
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Text(
@@ -304,26 +387,96 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                                 fontSize: 20, fontWeight: FontWeight.bold),
                           ),
                         ),
-                        Text(
-                          "${_formatVND(widget.loaiPhong.giaThapNhat)} VND /đêm",
-                          style: const TextStyle(
-                            color: Color(0xFFC97A3E),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                        const SizedBox(width: 10),
+                        // 🔥 CỘT GIÁ KIỂU SHOPEE
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Giá gốc gạch ngang + badge (nếu có KM)
+                            if (widget.loaiPhong.coKhuyenMai)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    "${_formatVND(widget.loaiPhong.giaPhong)} VND",
+                                    style: const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                      color: Colors.grey,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFC97A3E),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      '-${((1 - widget.loaiPhong.giaHienThi / widget.loaiPhong.giaPhong) * 100).toStringAsFixed(0)}%',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            const SizedBox(height: 2),
+                            // Giá chính (to, đậm)
+                            Text(
+                              "${_formatVND(widget.loaiPhong.giaHienThi)} VND/đêm",
+                              style: const TextStyle(
+                                color: Color(0xFFC97A3E),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
 
                     const SizedBox(height: 5),
 
-                    // 🔥 Số phòng trống
-                    Text(
-                      "${widget.loaiPhong.soPhongTrong} phòng trống",
-                      style: const TextStyle(color: Colors.grey),
+                    // Sửa lại phần hiển thị số phòng trống trong build method
+
+                    // 🔥 SỐ PHÒNG TRỐNG - HIỂN THỊ THEO NGUỒN
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.meeting_room,
+                            size: 14,
+                            color: soPhongTrong > 0 ? Colors.green : Colors.red,
+                          ),
+                          const SizedBox(width: 6),
+                          // 🔥 CHỈ HIỂN THỊ KHI TỪ SEARCHPAGE
+                          if (widget.soPhongTrongTheoNgay != null)
+                            Text(
+                              "$soPhongTrong phòng trống ",
+                              style: TextStyle(
+                                color: soPhongTrong > 0 ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          // 🔥 TỪ HOMEPAGE: HIỂN THỊ THÔNG BÁO KHÁC HOẶC KHÔNG HIỂN THỊ
+                          if (widget.soPhongTrongTheoNgay == null && !widget.fromHome)
+                            Text(
+                              "$soPhongTrong phòng trống",
+                              style: TextStyle(
+                                color: soPhongTrong > 0 ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
 
-                    // 🔥 Số người
+                    // Số người
                     Text(
                       "Tối đa: ${widget.loaiPhong.nguoiLon} người lớn${widget.loaiPhong.treEm > 0 ? ', ${widget.loaiPhong.treEm} trẻ em' : ''}",
                       style: const TextStyle(color: Colors.grey),
@@ -331,7 +484,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
                     const SizedBox(height: 15),
 
-                    // 🔥 Mô tả
+                    // Mô tả
                     const Text(
                       "Mô tả",
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -344,7 +497,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
                     const SizedBox(height: 15),
 
-                    // 🔥 Gallery ảnh thu nhỏ (nếu có nhiều ảnh)
+                    // Gallery ảnh thu nhỏ
                     if (imageUrls.length > 1) ...[
                       const Text(
                         "Thư viện ảnh",
@@ -371,37 +524,102 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
           ],
         ),
       ),
-      bottomNavigationBar: Padding(
+      // Bottom bar với nút thêm/bớt số lượng
+      // Tìm bottomNavigationBar và sửa onPressed
+      bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
-        child: Container(
-          height: 55,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFC97A3E), Color(0xFF6F1D01)],
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
             ),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const BookingDetailPage(),
+          ],
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              // Nút thêm/bớt số lượng
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFC97A3E)),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              );
-            },
-            child: const Center(
-              child: Text(
-                "Đặt phòng",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: _giamPhong,
+                      icon: const Icon(Icons.remove, color: Color(0xFFC97A3E)),
+                    ),
+                    Text(
+                      '$soLuongDat',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _themPhong,
+                      icon: const Icon(Icons.add, color: Color(0xFFC97A3E)),
+                    ),
+                  ],
                 ),
               ),
-            ),
+              const SizedBox(width: 16),
+              // Nút đặt phòng
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (soLuongDat > 0) {
+                      if (widget.fromHome) {
+                        // 🔥 Từ HomePage: Chuyển sang SearchPage
+                        _navigateToSearchPage();
+                      } else {
+                        // Từ SearchPage: Quay lại và cập nhật giỏ
+                        Navigator.pop(context, true);
+                      }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Vui lòng chọn số lượng phòng'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC97A3E),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Đặt phòng',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+  void _navigateToSearchPage() {
+    // Chuyển sang SearchPage, kèm thông tin phòng đã chọn
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SearchPage(
+          preSelectedRoom: widget.loaiPhong,
+          preSelectedQuantity: soLuongDat,
         ),
       ),
     );
@@ -409,11 +627,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
   // Format tiền
   String _formatVND(dynamic amount) {
-    double t = double.tryParse(amount?.toString() ?? '0') ?? 0;
-    return t.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
-    );
+    return NumberParser.formatVND(amount);
   }
 
   // Icon cho tiện nghi
@@ -456,7 +670,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   Widget _previewImg(String url, int index) {
     return GestureDetector(
       onTap: () {
-        // Chuyển slideshow đến ảnh được chọn
         _pageController.animateToPage(
           index,
           duration: const Duration(milliseconds: 300),
@@ -464,7 +677,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
         );
       },
       onLongPress: () {
-        // Nhấn giữ để xem toàn màn hình
         _showFullScreenImage(index);
       },
       child: Container(

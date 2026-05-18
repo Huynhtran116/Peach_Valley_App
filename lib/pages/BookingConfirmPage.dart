@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import 'KhoKhuyenMaiPage.dart';
 import 'PaymentPage.dart';
 
 class BookingConfirmPage extends StatefulWidget {
@@ -43,6 +44,9 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   int get tongTreEm => widget.selectedRooms.fold(0, (sum, r) => sum + ((r['treEm'] ?? 0) as int));
 
   bool daDongYChinhSach = false;
+  //
+  Map<String, dynamic>? _selectedKhuyenMai;
+  double tongGiaGoc = 0;
 
   @override
   void initState() {
@@ -60,37 +64,31 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   Future<void> tinhGia() async {
     try {
       double total = 0;
-
-      // Gom nhóm theo loại phòng để gọi API 1 lần/loại
       Map<int, int> loaiPhongCount = {};
       for (var room in widget.selectedRooms) {
         int maLoai = room['roomType']['MaLoaiPhong'];
         loaiPhongCount[maLoai] = (loaiPhongCount[maLoai] ?? 0) + 1;
       }
 
-      // Gọi API tinh-gia cho từng loại phòng
       for (var entry in loaiPhongCount.entries) {
         int maLoai = entry.key;
         int soLuong = entry.value;
-
         var response = await ApiService.post('tinh-gia', {
           'MaLoaiPhong': maLoai,
           'NgayNhanPhong': _formatDateAPI(widget.checkIn),
           'NgayTraPhong': _formatDateAPI(widget.checkOut),
           'SoLuong': soLuong,
         });
-
         total += (response['data']['tongTien'] ?? 0).toDouble();
       }
 
       setState(() {
-        tongGia = total;
-        tienDatCoc = total; // Đặt cọc 100% (có thể đổi thành %)
+        tongGiaGoc = total;  // 👈 THÊM
+        _tinhTongSauGiam();   // 👈 THÊM
         isLoadingGia = false;
       });
     } catch (e) {
       print('❌ Lỗi tính giá: $e');
-      // Fallback: tính giá thô từ giaThapNhat
       double total = 0;
       for (var room in widget.selectedRooms) {
         var type = room['roomType'];
@@ -98,10 +96,20 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
         total += gia * soDem;
       }
       setState(() {
-        tongGia = total;
-        tienDatCoc = total;
+        tongGiaGoc = total;  // 👈 THÊM
+        _tinhTongSauGiam();   // 👈 THÊM
         isLoadingGia = false;
       });
+    }
+  }
+  void _tinhTongSauGiam() {
+    if (_selectedKhuyenMai != null) {
+      double phanTramGiam = (_selectedKhuyenMai!['PhanTramGiamGia'] as num).toDouble();
+      tongGia = tongGiaGoc * (1 - phanTramGiam / 100);
+      tienDatCoc = tongGia;
+    } else {
+      tongGia = tongGiaGoc;
+      tienDatCoc = tongGiaGoc;
     }
   }
 
@@ -129,6 +137,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
           ghiChu: noteController.text.trim(),
           tongTien: tongGia,
           tienDatCoc: tienDatCoc,
+          selectedKhuyenMai: _selectedKhuyenMai,
         ),
       ),
     );
@@ -192,7 +201,15 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text("Xác nhận đặt phòng", style: TextStyle(color: Color(0xFF49120F))),
+        centerTitle: true,
+        title: const Text(
+          "Xác nhận đặt phòng",
+          style: TextStyle(
+            color: Color(0xFF49120F),
+            fontWeight: FontWeight.w500,
+            fontSize: 18,
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF49120F)),
           onPressed: () => Navigator.pop(context),
@@ -231,8 +248,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
               _buildRoomList(),
               const SizedBox(height: 16),
 
-              // Voucher
-              _buildVoucherInput(),
+              // // Voucher
+              // _buildVoucherInput(),
               const SizedBox(height: 16),
 
               // Tổng giá
@@ -392,7 +409,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text("👤 ${room['nguoiLon']} Người lớn, 👶 ${room['treEm']} Trẻ em \n${_formatTien(giaPhong)}đ/đêm × $soDem đêm",
+                Text("${room['nguoiLon']} Người lớn - ${room['treEm']} Trẻ em \n${_formatTien(giaPhong)}đ/đêm × $soDem đêm",
                     style: const TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
@@ -403,27 +420,116 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   Widget _buildVoucherInput() {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: TextField(
-            controller: voucherController,
-            decoration: _inputDeco("Nhập mã khuyến mại/voucher", Icons.card_giftcard),
+        if (_selectedKhuyenMai != null) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFC97A3E).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFC97A3E).withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Color(0xFFC97A3E), size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedKhuyenMai!['TenKM'] ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF49120F)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Mã: ${_selectedKhuyenMai!['MaKM']} • Giảm ${(_selectedKhuyenMai!['PhanTramGiamGia'] as num).toStringAsFixed(0)}%',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFC97A3E)),
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedKhuyenMai = null;
+                      _tinhTongSauGiam();
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.close, color: Colors.red, size: 18),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        ElevatedButton(
-          onPressed: () {
-            // TODO: Áp dụng voucher
-            _showPopup("Thông báo", "Tính năng đang phát triển", false);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF49120F),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ] else ...[
+          InkWell(
+            onTap: () async {
+              final prefs = await SharedPreferences.getInstance();
+              int maKH = prefs.getInt('user_maKH') ?? 0;
+
+              if (maKH == 0) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Vui lòng đăng nhập để sử dụng mã khuyến mãi'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+                return;
+              }
+
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const KhoKhuyenMaiPage()),
+              );
+
+              if (result != null && result is Map) {
+                setState(() {
+                  _selectedKhuyenMai = Map<String, dynamic>.from(result);
+                  _tinhTongSauGiam();
+                });
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Đã áp dụng mã ${result['TenKM']}'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFC97A3E)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_circle_outline, color: Color(0xFFC97A3E), size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Chọn mã khuyến mãi trong kho của bạn',
+                    style: TextStyle(color: Color(0xFFC97A3E), fontWeight: FontWeight.w500, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
           ),
-          child: const Text("ÁP DỤNG", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        ),
+        ],
       ],
     );
   }
@@ -438,6 +544,10 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       ),
       child: Column(
         children: [
+          // 🔥 Chọn mã KM (đã thêm)
+          _buildVoucherInput(),
+          const SizedBox(height: 12),
+
           if (isLoadingGia)
             const Center(child: Padding(
               padding: EdgeInsets.all(8.0),
@@ -446,48 +556,102 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
           else ...[
             ..._buildGiaChiTiet(),
             const Divider(height: 20),
-            _priceRow("Tổng giá", tongGia, isTotal: false),
-            const SizedBox(height: 4),
-            _priceRow("Tiền đặt cọc", tienDatCoc, isTotal: true),
-            const SizedBox(height: 12),
+            _priceRow("Tổng giá phòng", tongGiaGoc, isTotal: false),
 
-            // ✅ Checkbox + Link chính sách
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: Checkbox(
-                    value: daDongYChinhSach,
-                    onChanged: (v) => setState(() => daDongYChinhSach = v ?? false),
-                    activeColor: const Color(0xFFC97A3E),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            // 🔥 Hiển thị giảm giá nếu có mã KM
+            if (_selectedKhuyenMai != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Giảm ${(_selectedKhuyenMai!['PhanTramGiamGia'] as num).toStringAsFixed(0)}%',
+                    style: const TextStyle(fontSize: 14, color: Colors.green),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => _showChinhSachPopup(),
-                    child: RichText(
-                      text: TextSpan(
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF49120F)),
-                        children: [
-                          const TextSpan(text: "Tôi đã đọc và đồng ý với "),
-                          TextSpan(
-                            text: "Chính sách đặt phòng",
-                            style: const TextStyle(
-                              color: Color(0xFFC97A3E),
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ],
-                      ),
+                  Text(
+                    '-${_formatTien(tongGiaGoc - tongGia)} VND',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Colors.green,
                     ),
                   ),
+                ],
+              ),
+            ],
+
+            const SizedBox(height: 4),
+            const Divider(height: 20),
+            _priceRow("Tiền đặt cọc", tongGia, isTotal: true),
+            const SizedBox(height: 12),
+
+            // Checkbox + Link chính sách
+
+            InkWell(
+              onTap: () {
+                setState(() => daDongYChinhSach = !daDongYChinhSach);
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: daDongYChinhSach
+                      ? const Color(0xFFC97A3E).withOpacity(0.05)
+                      : Colors.grey.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: daDongYChinhSach
+                        ? const Color(0xFFC97A3E).withOpacity(0.3)
+                        : Colors.grey.withOpacity(0.2),
+                  ),
                 ),
-              ],
+                child: Row(
+                  children: [
+                    // Checkbox custom đẹp hơn
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: daDongYChinhSach ? const Color(0xFFC97A3E) : Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: daDongYChinhSach ? const Color(0xFFC97A3E) : Colors.grey.shade400,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: daDongYChinhSach
+                          ? const Icon(Icons.check, color: Colors.white, size: 14)
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    // Text
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF49120F)),
+                          children: [
+                            const TextSpan(text: "Tôi đã đọc và đồng ý với "),
+                            TextSpan(
+                              text: "Chính sách đặt phòng",
+                              style: const TextStyle(
+                                color: Color(0xFFC97A3E),
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Icon info
+                    GestureDetector(
+                      onTap: () => _showChinhSachPopup(),
+                      child: const Icon(Icons.info_outline, color: Color(0xFFC97A3E), size: 18),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ],

@@ -1,11 +1,32 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../models/loai_phong.dart';
+import '../services/cart_service.dart';
+import '../utils/number_parser.dart';
 import 'BookingConfirmPage.dart';
 import 'DetailRoomPage.dart';
+import 'HomePage.dart';
 
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  final LoaiPhong? preSelectedRoom; // 🔥 Phòng đã chọn từ HomePage
+  final int? preSelectedQuantity;// 🔥 Số lượng đã chọn từ HomePage
+
+  final DateTime? preSelectedCheckIn;
+  final DateTime? preSelectedCheckOut;
+  final int? preSelectedSoPhong;   // 🔥 THÊM
+  final int? preSelectedNguoiLon;   // 🔥 THÊM
+  final int? preSelectedTreEm;
+
+  const SearchPage({
+    super.key,
+    this.preSelectedRoom,
+    this.preSelectedQuantity,
+    this.preSelectedCheckIn,
+    this.preSelectedCheckOut,
+    this.preSelectedSoPhong,
+    this.preSelectedNguoiLon,
+    this.preSelectedTreEm,
+  });
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -36,15 +57,73 @@ class _SearchPageState extends State<SearchPage> {
   int get soDem => selectedCheckOut.difference(selectedCheckIn).inDays;
   late TextEditingController _searchController;
   @override
+  // hàm khởi tạo
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _loadCart(); // Load giỏ hàng đã lưu
+
+    // 🔥 Cập nhật thông tin từ DatePickerPage
+    if (widget.preSelectedCheckIn != null && widget.preSelectedCheckOut != null) {
+      selectedCheckIn = widget.preSelectedCheckIn!;
+      selectedCheckOut = widget.preSelectedCheckOut!;
+    }
+    if (widget.preSelectedSoPhong != null) {
+      soPhong = widget.preSelectedSoPhong!;
+    }
+    if (widget.preSelectedNguoiLon != null) {
+      soNguoiLon = widget.preSelectedNguoiLon!;
+    }
+    if (widget.preSelectedTreEm != null) {
+      soTreEm = widget.preSelectedTreEm!;
+    }
+    // 🔥 TỰ ĐỘNG TÌM KIẾM KHI MỞ TRANG
+    // Dùng addPostFrameCallback để đảm bảo UI đã sẵn sàng
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        timKiem();
+      }
+    });
+
+    // 🔥 Nếu có phòng được chọn từ HomePage, tự động thêm vào giỏ
+    if (widget.preSelectedRoom != null && widget.preSelectedQuantity != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _addPreSelectedRoomToCart();
+      });
+    }
+  }
+  void _addPreSelectedRoomToCart() {
+    // Chuyển LoaiPhong thành dạng room map để thêm vào giỏ
+    Map<String, dynamic> roomData = {
+      'MaLoaiPhong': widget.preSelectedRoom!.maLoaiPhong,
+      'TenLoaiPhong': widget.preSelectedRoom!.tenLoaiPhong,
+      'giaThapNhat': widget.preSelectedRoom!.giaThapNhat,
+      'hinhs': widget.preSelectedRoom!.hinhs.map((e) => {'Url': e.url}).toList(),
+      'NguoiLon': widget.preSelectedRoom!.nguoiLon,
+      'TreEm': widget.preSelectedRoom!.treEm,
+      'soPhongTrong': widget.preSelectedRoom!.soPhongTrong,
+    };
+
+    // Thêm vào giỏ với số lượng đã chọn
+    for (int i = 0; i < (widget.preSelectedQuantity ?? 1); i++) {
+      _themPhong(roomData, widget.preSelectedRoom!.giaThapNhat);
+    }
+
+    // Hiển thị thông báo
+    _showSnackBar("Đã thêm ${widget.preSelectedRoom!.tenLoaiPhong} vào giỏ");
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+  // 🔥 Hàm load giỏ hàng từ SharedPreferences
+  Future<void> _loadCart() async {
+    final savedCart = await CartService.loadCart();
+    setState(() {
+      gioPhong = savedCart;
+    });
   }
 
   // ========== GIỎ PHÒNG LOGIC ==========
@@ -75,7 +154,7 @@ class _SearchPageState extends State<SearchPage> {
         };
       }
     });
-
+    CartService.saveCart(gioPhong);
     _showSnackBar("Đã thêm ${room['TenLoaiPhong']}");
   }
 
@@ -88,7 +167,7 @@ class _SearchPageState extends State<SearchPage> {
         gioPhong.remove(maLoaiPhong);
       }
     });
-
+    CartService.saveCart(gioPhong);
     _showSnackBar("Đã cập nhật giỏ phòng");
   }
 
@@ -99,7 +178,7 @@ class _SearchPageState extends State<SearchPage> {
     setState(() {
       gioPhong.remove(maLoaiPhong);
     });
-
+    CartService.saveCart(gioPhong);
     _showSnackBar("Đã xóa $ten khỏi giỏ");
   }
 
@@ -198,14 +277,15 @@ class _SearchPageState extends State<SearchPage> {
 
   Future<void> timKiem() async {
     setState(() {
-      gioPhong.clear();
+     // gioPhong.clear();
       ketQua = [];
       ketQuaGoc = [];
       isSearching = true;
       hasSearched = true;
       _isFilterExpanded = false; // 🔥 Reset trạng thái filter khi tìm kiếm mới
     });
-
+    // 🔥 Xóa giỏ hàng cũ khi tìm kiếm mới
+  //  await CartService.clearCart();
     try {
       var response = await ApiService.get(
         'phong/tim-kiem?checkIn=${_formatDateAPI(selectedCheckIn)}&checkOut=${_formatDateAPI(selectedCheckOut)}&NguoiLon=$soNguoiLon&TreEm=$soTreEm&SoPhong=$soPhong',
@@ -364,7 +444,13 @@ class _SearchPageState extends State<SearchPage> {
         title: const Text("Tìm phòng", style: TextStyle(color: Color(0xFF49120F))),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF49120F)),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const HomePage()),
+                  (route) => false,
+            );
+          }
         ),
         actions: [
           IconButton(
@@ -611,24 +697,122 @@ class _SearchPageState extends State<SearchPage> {
     return GestureDetector(
       onTap: _showFilterPopup,
       child: Container(
-        padding: const EdgeInsets.all(14),
         margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFFE8BE97).withOpacity(0.3),
-          borderRadius: BorderRadius.circular(14),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFC97A3E).withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.search, color: Color(0xFF49120F)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                "${_formatDate(selectedCheckIn)} → ${_formatDate(selectedCheckOut)} • $soPhong phòng • $soNguoiLon Người lớn, $soTreEm Trẻ em",
-                style: const TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.w500),
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            const Text("Sửa", style: TextStyle(color: Color(0xFFC97A3E), fontWeight: FontWeight.bold)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Hàng 1: Icon + tiêu đề
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC97A3E).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.search,
+                    color: Color(0xFFC97A3E),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  "Thông tin tìm kiếm",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF49120F),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC97A3E),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    "Sửa",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Hàng 2: Ngày
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 16, color: Color(0xFFC97A3E)),
+                const SizedBox(width: 8),
+                Text(
+                  "${_formatDate(selectedCheckIn)} - ${_formatDate(selectedCheckOut)}",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF49120F),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Hàng 3: Số phòng + số khách
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8BE97).withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.meeting_room, size: 14, color: Color(0xFF49120F)),
+                      const SizedBox(width: 4),
+                      Text(
+                        "$soPhong phòng",
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF49120F)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8BE97).withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people, size: 14, color: Color(0xFF49120F)),
+                      const SizedBox(width: 4),
+                      Text(
+                        "$soNguoiLon Người lớn, $soTreEm Trẻ em",
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF49120F)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -650,8 +834,8 @@ class _SearchPageState extends State<SearchPage> {
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: _showFilterPopup,
-              icon: const Icon(Icons.tune),
-              label: const Text("Tìm kiếm"),
+              icon: const Icon(Icons.tune, color: Color(0xFFFFFFFF),),
+              label: const Text("Tìm kiếm" ,style: TextStyle(color: Color(0xFFFFFFFF))),
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC97A3E)),
             ),
           ],
@@ -695,7 +879,11 @@ class _SearchPageState extends State<SearchPage> {
 
     List<dynamic> hinhs = room['hinhs'] ?? [];
     String anh = hinhs.isNotEmpty ? (hinhs[0]['Url'] ?? '') : '';
-    double gia = double.tryParse(room['giaThapNhat']?.toString() ?? '0') ?? 0;
+    double giaGoc = NumberParser.toDouble(room['GiaPhong'] ?? 0);
+    double giaGiam = room['GiaGiam'] != null
+        ? NumberParser.toDouble(room['GiaGiam'])
+        : giaGoc;
+    double gia = giaGiam; // Ưu tiên giá giảm
     List<dynamic> tienNghis = room['tien_nghis'] ?? [];
 
     int soPhongDaChon = (gioPhong[maLoai]?['quantity'] as int?) ?? 0;
@@ -771,13 +959,53 @@ class _SearchPageState extends State<SearchPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // Giá
-                    Text(
-                      '${_formatTien(gia)} VND /đêm',
-                      style: const TextStyle(
-                        color: Color(0xFFC97A3E),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 🔥 Giá gốc gạch ngang + badge giảm giá (nếu có KM)
+                        if (giaGiam < giaGoc)
+                          Row(
+                            children: [
+                              Text(
+                                '${_formatTien(giaGoc)} VND',
+                                style: const TextStyle(
+                                  decoration: TextDecoration.lineThrough,
+                                  color: Colors.grey,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Badge giảm giá
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFC97A3E),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '-${((1 - giaGiam / giaGoc) * 100).toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        // 🔥 Giá giảm (to, đậm, màu cam)
+                        Text(
+                          '${_formatTien(gia)} VND/đêm',
+                          style: const TextStyle(
+                            color: Color(0xFFC97A3E),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                          ),
+                        ),
+
+                      ],
                     ),
                     // Nút thêm/bớt phòng (bên phải)
                     Container(
@@ -872,8 +1100,11 @@ class _SearchPageState extends State<SearchPage> {
   }
 
 // 🔥 Thêm hàm điều hướng đến trang chi tiết phòng
-  void _navigateToRoomDetail(dynamic room) {
-    // Chuyển đổi dữ liệu từ API sang model LoaiPhong
+  void _navigateToRoomDetail(dynamic room) async {
+    // 🔥 Lấy số phòng trống từ API
+    int soPhongTrongTheoNgay = room['soPhongTrong'] ?? 0;
+
+    // 🔥 Chuyển đổi dữ liệu từ API sang model LoaiPhong (phiên bản mới)
     LoaiPhong loaiPhong = LoaiPhong(
       maLoaiPhong: room['MaLoaiPhong'] ?? 0,
       tenLoaiPhong: room['TenLoaiPhong'] ?? '',
@@ -882,30 +1113,43 @@ class _SearchPageState extends State<SearchPage> {
       treEm: room['TreEm'] ?? 0,
       hinhs: (room['hinhs'] as List<dynamic>?)
           ?.map((e) => HinhAnh.fromJson(e as Map<String, dynamic>))
-          .toList() ??
-          [],
+          .toList() ?? [],
       phongs: (room['phongs'] as List<dynamic>?)
           ?.map((e) => Phong.fromJson(e as Map<String, dynamic>))
-          .toList() ??
-          [],
-      bangGias: (room['bang_gias'] as List<dynamic>?)
-          ?.map((e) => BangGia.fromJson(e as Map<String, dynamic>))
-          .toList() ??
-          [],
+          .toList() ?? [],
+
+      // 🔥 THAY ĐỔI: Dùng giaPhong và giaGiam thay vì bangGias
+      giaPhong: NumberParser.toDouble(room['GiaPhong'] ?? 0),
+      giaGiam: room['GiaGiam'] != null
+          ? NumberParser.toDouble(room['GiaGiam'])
+          : null,
+
       tienNghis: (room['tien_nghis'] as List<dynamic>?)
           ?.map((e) => TienNghi.fromJson(e as Map<String, dynamic>))
-          .toList() ??
-          [],
+          .toList() ?? [],
+
+      // 🔥 THÊM: Mã khuyến mãi nếu có
+      maKM: room['MaKM'],
     );
 
-    Navigator.push(
+    // 🔥 Điều hướng và chờ kết quả trả về
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RoomDetailPage(
           loaiPhong: loaiPhong,
+          soPhongTrongTheoNgay: soPhongTrongTheoNgay,
         ),
       ),
     );
+
+    // 🔥 Nếu có thay đổi, reload giỏ hàng
+    if (result == true) {
+      final updatedCart = await CartService.loadCart();
+      setState(() {
+        gioPhong = updatedCart;
+      });
+    }
   }
 
 
@@ -1118,18 +1362,107 @@ class _SearchPageState extends State<SearchPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Tiện nghi phòng", style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: tienNghis.map((tn) => ListTile(
-            leading: const Icon(Icons.check_circle, color: Color(0xFFC97A3E), size: 20),
-            title: Text(tn['TenTienNghi'] ?? ''),
-            dense: true,
-          )).toList(),
+        title: Row(
+          children: [
+            const Icon(Icons.cleaning_services, color: Color(0xFFC97A3E), size: 24),
+            const SizedBox(width: 8),
+            const Text(
+              "Tiện nghi phòng",
+              style: TextStyle(
+                color: Color(0xFF49120F),
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ],
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Đóng"))],
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Divider(),
+              // 🔥 Wrap tự động xuống dòng + cuộn dọc nếu quá cao
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5, // Tối đa 50% màn hình
+                ),
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: tienNghis.map((tn) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8BE97).withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _getIconForTienNghi(tn['TenTienNghi'] ?? ''),
+                              size: 14,
+                              color: const Color(0xFFC97A3E),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              tn['TenTienNghi'] ?? '',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF49120F),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              "Đóng",
+              style: TextStyle(
+                color: Color(0xFFC97A3E),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+  IconData _getIconForTienNghi(String ten) {
+    switch (ten.toLowerCase()) {
+      case 'wifi':
+        return Icons.wifi;
+      case 'tv':
+        return Icons.tv;
+      case 'điều hòa':
+      case 'may lanh':
+        return Icons.ac_unit;
+      case 'tủ lạnh':
+        return Icons.kitchen;
+      case 'bàn làm việc':
+        return Icons.desk;
+      case 'bồn tắm':
+        return Icons.bathtub;
+      case 'mini bar':
+        return Icons.local_bar;
+      case 'máy sấy tóc':
+        return Icons.air;
+      case 'giường':
+        return Icons.bed;
+      default:
+        return Icons.check_circle;
+    }
   }
 
   Widget _placeholder(double height) {

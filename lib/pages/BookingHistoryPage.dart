@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'HomePage.dart';
+import 'SearchPage.dart';
 
 class BookingHistoryPage extends StatefulWidget {
   const BookingHistoryPage({super.key});
@@ -581,13 +582,21 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.search),
-                    label: const Text("Tìm phòng ngay"),
+                    onPressed: () {
+                      // 🔥 Thay vì pop, chuyển trực tiếp đến SearchPage
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchPage()),
+                            (route) => false, // Xóa tất cả các màn hình trước đó
+                      );
+                    },
+                    icon: const Icon(Icons.search, color: Color(0xFFFFFFFF)),
+                    label: const Text("Tìm phòng ngay", style: TextStyle(color: Color(0xFFFFFFFF)),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFC97A3E),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ],

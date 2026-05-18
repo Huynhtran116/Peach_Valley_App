@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 🔥 Thêm import này
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../models/khuyen_mai.dart';
@@ -15,7 +16,7 @@ class PromotionPage extends StatefulWidget {
 class _PromotionPageState extends State<PromotionPage> {
   List<KhuyenMaiModel> danhSach = [];
   bool isLoading = true;
-  bool isLoggedIn = false; // Thêm biến kiểm tra đăng nhập
+  bool isLoggedIn = false;
 
   @override
   void initState() {
@@ -24,7 +25,6 @@ class _PromotionPageState extends State<PromotionPage> {
     fetchKhuyenMai();
   }
 
-  // Kiểm tra trạng thái đăng nhập
   Future<void> _checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString('user_token');
@@ -39,7 +39,6 @@ class _PromotionPageState extends State<PromotionPage> {
     try {
       var response = await ApiService.get('khuyen-mai');
 
-      // Kiểm tra mounted trước khi setState
       if (!mounted) return;
 
       List data = response is List ? response : response['data'] ?? [];
@@ -59,7 +58,6 @@ class _PromotionPageState extends State<PromotionPage> {
     }
   }
 
-  // Hiển thị dialog yêu cầu đăng nhập
   void _showLoginRequiredDialog() {
     showDialog(
       context: context,
@@ -89,9 +87,7 @@ class _PromotionPageState extends State<PromotionPage> {
             ),
             child: const Text(
               'Đăng nhập',
-              style: TextStyle(
-                color: Color(0xFFFFFFFF),
-              ),
+              style: TextStyle(color: Color(0xFFFFFFFF)),
             ),
           ),
         ],
@@ -99,7 +95,6 @@ class _PromotionPageState extends State<PromotionPage> {
     );
   }
 
-  // Lưu khuyến mãi
   void _savePromotion(KhuyenMaiModel km) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -109,7 +104,19 @@ class _PromotionPageState extends State<PromotionPage> {
         duration: const Duration(seconds: 2),
       ),
     );
-    // TODO: Gọi API lưu khuyến mãi vào tài khoản
+  }
+
+  // 🔥 Thêm hàm sao chép mã
+  void _copyCode(String code) {
+    Clipboard.setData(ClipboardData(text: code));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đã sao chép mã khuyến mãi'),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -235,6 +242,43 @@ class _PromotionPageState extends State<PromotionPage> {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
+                          // 🔥 THÊM MÃ KHUYẾN MÃI
+                          GestureDetector(
+                            onTap: () => _copyCode(km.maKM),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFC97A3E).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.local_offer,
+                                    size: 12,
+                                    color: Color(0xFFC97A3E),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Mã: ${km.maKM}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFFC97A3E),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.copy,
+                                    size: 12,
+                                    color: Color(0xFFC97A3E),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
                           Text(
                             km.expiryText,
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -261,7 +305,7 @@ class _PromotionPageState extends State<PromotionPage> {
 
                     const SizedBox(width: 20),
 
-                    /// 🔥 BUTTON - Chỉ hiển thị khi đã đăng nhập
+                    /// BUTTON - Chỉ hiển thị khi đã đăng nhập
                     if (isLoggedIn)
                       GestureDetector(
                         onTap: () => _savePromotion(km),
@@ -292,7 +336,7 @@ class _PromotionPageState extends State<PromotionPage> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
-                            "Đăng nhập để lưu",
+                            "Đăng nhập",
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,

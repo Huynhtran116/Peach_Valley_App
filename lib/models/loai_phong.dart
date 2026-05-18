@@ -1,3 +1,5 @@
+import '../utils/number_parser.dart';
+
 class LoaiPhong {
   final int maLoaiPhong;
   final String tenLoaiPhong;
@@ -6,8 +8,10 @@ class LoaiPhong {
   final int treEm;
   final List<HinhAnh> hinhs;
   final List<Phong> phongs;
-  final List<BangGia> bangGias;
+  final double giaPhong;      // 🔥 THÊM: Giá gốc từ API
+  final double? giaGiam;      // 🔥 THÊM: Giá sau giảm (nullable)
   final List<TienNghi> tienNghis;
+  final String? maKM;         // 🔥 THÊM: Mã khuyến mãi
 
   LoaiPhong({
     required this.maLoaiPhong,
@@ -17,37 +21,53 @@ class LoaiPhong {
     required this.treEm,
     required this.hinhs,
     required this.phongs,
-    required this.bangGias,
+    required this.giaPhong,
+    this.giaGiam,
     required this.tienNghis,
+    this.maKM,
   });
 
   factory LoaiPhong.fromJson(Map<String, dynamic> json) {
     return LoaiPhong(
-      maLoaiPhong: json['MaLoaiPhong'],
-      tenLoaiPhong: json['TenLoaiPhong'],
+      maLoaiPhong: NumberParser.toInt(json['MaLoaiPhong']),
+      tenLoaiPhong: json['TenLoaiPhong'] ?? '',
       mota: json['Mota'] ?? '',
-      nguoiLon: json['NguoiLon'] ?? 2,
-      treEm: json['TreEm'] ?? 0,
+      nguoiLon: NumberParser.toInt(json['NguoiLon'], defaultValue: 2),
+      treEm: NumberParser.toInt(json['TreEm']),
       hinhs: (json['hinhs'] as List? ?? [])
           .map((e) => HinhAnh.fromJson(e))
           .toList(),
       phongs: (json['phongs'] as List? ?? [])
           .map((e) => Phong.fromJson(e))
           .toList(),
-      bangGias: (json['bang_gias'] as List? ?? [])
-          .map((e) => BangGia.fromJson(e))
-          .toList(),
+
+      // 🔥 Parse giá từ API
+      giaPhong: NumberParser.toDouble(json['GiaPhong']),
+      giaGiam: json['GiaGiam'] != null
+          ? NumberParser.toDouble(json['GiaGiam'])
+          : null,
+
       tienNghis: (json['tien_nghis'] as List? ?? [])
           .map((e) => TienNghi.fromJson(e))
           .toList(),
+
+      maKM: json['MaKM'],
     );
   }
 
-  // Giá thấp nhất
+  // 🔥 Giá hiển thị (ưu tiên giá giảm, nếu không có thì dùng giá gốc)
+  double get giaHienThi {
+    return giaGiam ?? giaPhong;
+  }
+
+  // 🔥 Giá thấp nhất (nay chỉ là giá hiển thị)
   double get giaThapNhat {
-    if (bangGias.isEmpty) return 0;
-    return bangGias.map((e) => e.giaPhong).reduce(
-            (a, b) => a < b ? a : b);
+    return giaHienThi;
+  }
+
+  // 🔥 Kiểm tra có khuyến mãi không
+  bool get coKhuyenMai {
+    return giaGiam != null && giaGiam! < giaPhong;
   }
 
   // Số phòng trống
@@ -69,8 +89,8 @@ class HinhAnh {
 
   factory HinhAnh.fromJson(Map<String, dynamic> json) {
     return HinhAnh(
-      id: json['Id'],
-      url: json['Url'],
+      id: NumberParser.toInt(json['Id']),
+      url: json['Url'] ?? '',
     );
   }
 }
@@ -88,26 +108,14 @@ class Phong {
 
   factory Phong.fromJson(Map<String, dynamic> json) {
     return Phong(
-      maPhong: json['MaPhong'],
-      soPhong: json['SoPhong'],
-      tinhTrang: json['TinhTrang'],
+      maPhong: NumberParser.toInt(json['MaPhong']),
+      soPhong: json['SoPhong'] ?? '',
+      tinhTrang: NumberParser.toInt(json['TinhTrang']),
     );
   }
 }
 
-class BangGia {
-  final int mua;
-  final double giaPhong;
-
-  BangGia({required this.mua, required this.giaPhong});
-
-  factory BangGia.fromJson(Map<String, dynamic> json) {
-    return BangGia(
-      mua: json['Mua'],
-      giaPhong: double.parse(json['GiaPhong']),
-    );
-  }
-}
+// 🔥 XÓA class BangGia vì API không trả về bang_gias
 
 class TienNghi {
   final int maTienNghi;
@@ -117,8 +125,8 @@ class TienNghi {
 
   factory TienNghi.fromJson(Map<String, dynamic> json) {
     return TienNghi(
-      maTienNghi: json['MaTienNghi'],
-      tenTienNghi: json['TenTienNghi'],
+      maTienNghi: NumberParser.toInt(json['MaTienNghi']),
+      tenTienNghi: json['TenTienNghi'] ?? '',
     );
   }
 }

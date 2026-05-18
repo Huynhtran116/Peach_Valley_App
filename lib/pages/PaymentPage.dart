@@ -6,6 +6,7 @@ import 'BookingHistoryPage.dart';
 import 'HomePage.dart';
 import 'SignInPage.dart';
 import 'dart:async';
+import '../services/khuyen_mai_service.dart';
 
 class PaymentPage extends StatefulWidget {
   final DateTime checkIn;
@@ -19,7 +20,7 @@ class PaymentPage extends StatefulWidget {
   final String ghiChu;
   final double tongTien;
   final double tienDatCoc;
-
+  final Map<String, dynamic>? selectedKhuyenMai;
   const PaymentPage({
     super.key,
     required this.checkIn,
@@ -33,6 +34,7 @@ class PaymentPage extends StatefulWidget {
     required this.ghiChu,
     required this.tongTien,
     required this.tienDatCoc,
+    this.selectedKhuyenMai,
   });
 
   @override
@@ -140,13 +142,12 @@ class _PaymentPageState extends State<PaymentPage> {
       print('✅ Response đặt phòng: $bookingResponse');
 
       int maDatPhong = bookingResponse['data']['datPhong']['MaDatPhong'];
-      double tongTien = double.tryParse(
-          bookingResponse['data']['hoaDon']['TongTien']?.toString() ?? '0') ?? widget.tienDatCoc;
+      double soTienThanhToan = widget.tienDatCoc;
 
       // BƯỚC 2: Xử lý thanh toán
       if (selectedMethod == 1) {
         var paymentResponse = await ApiService.post('vnpay-payment', {
-          'amount': tongTien.toInt(),
+          'amount': soTienThanhToan.toInt(),
           'dat_phong_ids': [maDatPhong],
           'bank_code': 'VNBANK',
           'description': "Thanh toan dat phong Peach Valley",
@@ -223,6 +224,10 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   void _showPaymentSuccess(int maDatPhong, String? txnRef) {
+    // 🔥 Nếu có mã KM, đánh dấu đã sử dụng
+    if (widget.selectedKhuyenMai != null) {
+      _suDungKhuyenMai();
+    }
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -256,7 +261,7 @@ class _PaymentPageState extends State<PaymentPage> {
                   }
                 },
                 icon: const Icon(Icons.receipt_long, size: 18),
-                label: Text(isLoggedIn ? "Xem lịch sử đặt phòng" : "Đăng nhập để xem lịch sử"),
+                label: Text(isLoggedIn ? "Xem lịch sử đặt phòng" : "Đăng nhập để xem lịch sử" , style: TextStyle(color: Color(0xFFFFFFFF)),),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFC97A3E),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -403,6 +408,25 @@ class _PaymentPageState extends State<PaymentPage> {
       ),
     );
   }
+  //
+  Future<void> _suDungKhuyenMai() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      int maKH = prefs.getInt('user_maKH') ?? 0;
+
+      print('🔍 _suDungKhuyenMai: maKH=$maKH, maKM=${widget.selectedKhuyenMai!['MaKM']}');
+
+      if (maKH > 0 && widget.selectedKhuyenMai != null) {
+        final result = await KhuyenMaiService.suDungKhuyenMai(
+          maKH,
+          widget.selectedKhuyenMai!['MaKM'] ?? '',
+        );
+        print('🔍 Kết quả suDungKhuyenMai: $result');  // 👈 XEM LOG NÀY
+      }
+    } catch (e) {
+      print('❌ Lỗi đánh dấu mã KM: $e');
+    }
+  }
 
   void _showError(String message) {
     showDialog(
@@ -448,7 +472,15 @@ class _PaymentPageState extends State<PaymentPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text("Thanh toán", style: TextStyle(color: Color(0xFF49120F))),
+        centerTitle: true,
+        title: const Text(
+          "Thanh toán",
+          style: TextStyle(
+            color: Color(0xFF49120F),
+            fontWeight: FontWeight.w500,
+            fontSize: 18,
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF49120F)),
           onPressed: () => Navigator.pop(context),
@@ -613,7 +645,31 @@ class _PaymentPageState extends State<PaymentPage> {
           _infoRow("Số điện thoại", widget.soDienThoai),
           if (widget.email.isNotEmpty) _infoRow("Email", widget.email),
           _infoRow("Số phòng", "${widget.selectedRooms.length} phòng • $soDem đêm"),
-          // _infoRow("Khách", "${widget.soNguoiLon} Người lớn, ${widget.soTreEm} Trẻ em"),
+
+          // 🔥 THÊM: Hiển thị mã KM nếu có
+          if (widget.selectedKhuyenMai != null) ...[
+            const Divider(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.local_offer, color: Colors.green, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Đã áp dụng: ${widget.selectedKhuyenMai!['TenKM']} (-${(widget.selectedKhuyenMai!['PhanTramGiamGia'] as num).toStringAsFixed(0)}%)',
+                      style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           const Divider(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
