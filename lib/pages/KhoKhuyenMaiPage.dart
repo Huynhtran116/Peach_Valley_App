@@ -12,20 +12,48 @@ class KhoKhuyenMaiPage extends StatefulWidget {
   State<KhoKhuyenMaiPage> createState() => _KhoKhuyenMaiPageState();
 }
 
-class _KhoKhuyenMaiPageState extends State<KhoKhuyenMaiPage> {
+class _KhoKhuyenMaiPageState extends State<KhoKhuyenMaiPage>  with WidgetsBindingObserver{
   List<Map<String, dynamic>> _khoKhuyenMai = [];
   List<Map<String, dynamic>> _allKhoKhuyenMai = [];
   int _diemHienTai = 0;
   bool _isLoading = true;
   String? _errorMessage;
   int? _selectedFilter; // null = Tất cả
-
+  DateTime? _lastReload;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedFilter = null;
     _loadData();
 
+  }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reloadIfNeeded();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reloadIfNeeded();
+  }
+
+  Future<void> _reloadIfNeeded() async {
+    final now = DateTime.now();
+    if (_lastReload == null || now.difference(_lastReload!).inSeconds > 30) {
+      _lastReload = now;
+      _loadData();
+    }
   }
 
   // ========== LOAD DATA ==========
@@ -45,8 +73,16 @@ class _KhoKhuyenMaiPageState extends State<KhoKhuyenMaiPage> {
         return;
       }
 
-      final response = await ApiService.get('kho-khuyen-mai/khach-hang/$maKH');
+      // GỌI 2 API SONG SONG
+      final results = await Future.wait([
+        ApiService.get('kho-khuyen-mai/khach-hang/$maKH'),
+        ApiService.get('khach-hang/$maKH'),
+      ]);
 
+      final response = results[0];
+      final khResponse = results[1];
+
+      // Parse kho khuyến mãi
       List<dynamic> rawData = [];
       if (response is List) {
         rawData = response;
@@ -85,14 +121,10 @@ class _KhoKhuyenMaiPageState extends State<KhoKhuyenMaiPage> {
         };
       }).toList();
 
+      // Parse điểm
       int diem = 0;
-      try {
-        final khResponse = await ApiService.get('khach-hang/$maKH');
-        if (khResponse is Map) {
-          diem = _parseInt(khResponse['data']?['DIEM'] ?? khResponse['DIEM'] ?? 0);
-        }
-      } catch (e) {
-        print('❌ Lỗi lấy điểm: $e');
+      if (khResponse is Map) {
+        diem = _parseInt(khResponse['data']?['DIEM'] ?? khResponse['DIEM'] ?? 0);
       }
 
       setState(() {
@@ -103,6 +135,7 @@ class _KhoKhuyenMaiPageState extends State<KhoKhuyenMaiPage> {
         _errorMessage = null;
       });
     } catch (e) {
+      print('❌ Lỗi tải dữ liệu: $e');
       setState(() {
         _errorMessage = 'Lỗi tải dữ liệu';
         _isLoading = false;

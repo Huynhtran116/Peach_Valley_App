@@ -580,7 +580,7 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
         ),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF49120F)),
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF49120F)),
           onPressed: () => Navigator.pop(context),
         ),
       ),

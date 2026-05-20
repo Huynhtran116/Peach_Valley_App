@@ -7,14 +7,14 @@ import 'BookingConfirmPage.dart';
 import 'DetailRoomPage.dart';
 import 'HomePage.dart';
 
-class SearchPage extends StatefulWidget {
-  final LoaiPhong? preSelectedRoom; // 🔥 Phòng đã chọn từ HomePage
-  final int? preSelectedQuantity;// 🔥 Số lượng đã chọn từ HomePage
+class SearchPage extends StatefulWidget  {
+  final LoaiPhong? preSelectedRoom; //  Phòng đã chọn từ HomePage
+  final int? preSelectedQuantity;//  Số lượng đã chọn từ HomePage
 
   final DateTime? preSelectedCheckIn;
   final DateTime? preSelectedCheckOut;
-  final int? preSelectedSoPhong;   // 🔥 THÊM
-  final int? preSelectedNguoiLon;   // 🔥 THÊM
+  final int? preSelectedSoPhong;   //  THÊM
+  final int? preSelectedNguoiLon;   //  THÊM
   final int? preSelectedTreEm;
 
   const SearchPage({
@@ -32,7 +32,7 @@ class SearchPage extends StatefulWidget {
   State<SearchPage> createState() => _SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> {
+class _SearchPageState extends State<SearchPage> with WidgetsBindingObserver {
   // Filter
   DateTime selectedCheckIn = DateTime.now();
   DateTime selectedCheckOut = DateTime.now().add(const Duration(days: 1));
@@ -40,10 +40,10 @@ class _SearchPageState extends State<SearchPage> {
   int soTreEm = 0;
   int soPhong = 1;
 
-  // 🔥 BỘ LỌC MỚI
+  // BỘ LỌC MỚI
   String searchKeyword = ''; // Tìm kiếm theo tên phòng
   String selectedSort = 'Mặc định'; // 'Mặc định', 'Giá tăng dần', 'Giá giảm dần'
-  bool _isFilterExpanded = false; // 🔥 Trạng thái mở rộng bộ lọc
+  bool _isFilterExpanded = false; // Trạng thái mở rộng bộ lọc
 
   // Kết quả
   List<dynamic> ketQua = [];
@@ -51,19 +51,23 @@ class _SearchPageState extends State<SearchPage> {
   bool isSearching = false;
   bool hasSearched = false;
 
-  // ✅ Giỏ phòng dạng grouped: Map<MaLoaiPhong, {...}>
+  //  Giỏ phòng dạng grouped: Map<MaLoaiPhong, {...}>
   Map<int, Map<String, dynamic>> gioPhong = {};
 
   int get soDem => selectedCheckOut.difference(selectedCheckIn).inDays;
   late TextEditingController _searchController;
+
+  DateTime? _lastReload;
+
   @override
   // hàm khởi tạo
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _searchController = TextEditingController();
     _loadCart(); // Load giỏ hàng đã lưu
 
-    // 🔥 Cập nhật thông tin từ DatePickerPage
+    // Cập nhật thông tin từ DatePickerPage
     if (widget.preSelectedCheckIn != null && widget.preSelectedCheckOut != null) {
       selectedCheckIn = widget.preSelectedCheckIn!;
       selectedCheckOut = widget.preSelectedCheckOut!;
@@ -77,7 +81,7 @@ class _SearchPageState extends State<SearchPage> {
     if (widget.preSelectedTreEm != null) {
       soTreEm = widget.preSelectedTreEm!;
     }
-    // 🔥 TỰ ĐỘNG TÌM KIẾM KHI MỞ TRANG
+    // TỰ ĐỘNG TÌM KIẾM KHI MỞ TRANG
     // Dùng addPostFrameCallback để đảm bảo UI đã sẵn sàng
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -85,7 +89,7 @@ class _SearchPageState extends State<SearchPage> {
       }
     });
 
-    // 🔥 Nếu có phòng được chọn từ HomePage, tự động thêm vào giỏ
+    // Nếu có phòng được chọn từ HomePage, tự động thêm vào giỏ
     if (widget.preSelectedRoom != null && widget.preSelectedQuantity != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _addPreSelectedRoomToCart();
@@ -115,10 +119,35 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
   }
-  // 🔥 Hàm load giỏ hàng từ SharedPreferences
+  // Reload khi app từ background quay lại
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reloadIfNeeded();
+    }
+  }
+  // Reload khi quay lại từ trang khác
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reloadIfNeeded();
+  }
+  // Hàm reload thông minh
+  Future<void> _reloadIfNeeded() async {
+    final now = DateTime.now();
+
+    // Nếu chưa load lần nào hoặc đã quá 30 giây -> reload
+    if (_lastReload == null || now.difference(_lastReload!).inSeconds > 30) {
+      _lastReload = now;
+      _loadCart(); // Chỉ load giỏ hàng, không tìm kiếm lại
+    }
+  }
+
+  // Hàm load giỏ hàng từ SharedPreferences
   Future<void> _loadCart() async {
     final savedCart = await CartService.loadCart();
     setState(() {
@@ -226,7 +255,7 @@ class _SearchPageState extends State<SearchPage> {
 
     List<dynamic> filtered = List.from(ketQuaGoc);
 
-    // 🔥 Lọc theo từ khóa (tên phòng, mô tả, tiện nghi)
+    //  Lọc theo từ khóa (tên phòng, mô tả, tiện nghi)
     if (searchKeyword.isNotEmpty) {
       filtered = filtered.where((room) {
         String ten = room['TenLoaiPhong']?.toLowerCase() ?? '';
@@ -243,17 +272,17 @@ class _SearchPageState extends State<SearchPage> {
       }).toList();
     }
 
-    // 🔥 Sắp xếp theo giá
+    //  SỬA: Sắp xếp theo GiaGiam (giá sau giảm), nếu không có thì dùng GiaPhong
     if (selectedSort == 'Giá tăng dần') {
       filtered.sort((a, b) {
-        double giaA = double.tryParse(a['giaThapNhat']?.toString() ?? '0') ?? 0;
-        double giaB = double.tryParse(b['giaThapNhat']?.toString() ?? '0') ?? 0;
+        double giaA = _getGiaHienThi(a);
+        double giaB = _getGiaHienThi(b);
         return giaA.compareTo(giaB);
       });
     } else if (selectedSort == 'Giá giảm dần') {
       filtered.sort((a, b) {
-        double giaA = double.tryParse(a['giaThapNhat']?.toString() ?? '0') ?? 0;
-        double giaB = double.tryParse(b['giaThapNhat']?.toString() ?? '0') ?? 0;
+        double giaA = _getGiaHienThi(a);
+        double giaB = _getGiaHienThi(b);
         return giaB.compareTo(giaA);
       });
     }
@@ -261,6 +290,15 @@ class _SearchPageState extends State<SearchPage> {
     setState(() {
       ketQua = filtered;
     });
+  }
+
+//  THÊM HÀM NÀY: Lấy giá hiển thị (ưu tiên giá giảm)
+  double _getGiaHienThi(dynamic room) {
+    // Ưu tiên GiaGiam, nếu không có thì dùng GiaPhong
+    if (room['GiaGiam'] != null) {
+      return NumberParser.toDouble(room['GiaGiam']);
+    }
+    return NumberParser.toDouble(room['GiaPhong'] ?? 0);
   }
 
   void _resetFilters() {
@@ -282,9 +320,9 @@ class _SearchPageState extends State<SearchPage> {
       ketQuaGoc = [];
       isSearching = true;
       hasSearched = true;
-      _isFilterExpanded = false; // 🔥 Reset trạng thái filter khi tìm kiếm mới
+      _isFilterExpanded = false; //  Reset trạng thái filter khi tìm kiếm mới
     });
-    // 🔥 Xóa giỏ hàng cũ khi tìm kiếm mới
+    //  Xóa giỏ hàng cũ khi tìm kiếm mới
   //  await CartService.clearCart();
     try {
       var response = await ApiService.get(
@@ -295,7 +333,7 @@ class _SearchPageState extends State<SearchPage> {
         ketQuaGoc = response['data'] ?? [];
         ketQua = List.from(ketQuaGoc);
         isSearching = false;
-        _isFilterExpanded = ketQua.isNotEmpty; // 🔥 Chỉ mở filter nếu có kết quả
+        _isFilterExpanded = ketQua.isNotEmpty; //  Chỉ mở filter nếu có kết quả
       });
     } catch (e) {
       setState(() => isSearching = false);
@@ -441,9 +479,16 @@ class _SearchPageState extends State<SearchPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text("Tìm phòng", style: TextStyle(color: Color(0xFF49120F))),
+        centerTitle: true,
+        title: const Text("Tìm phòng",
+          style: TextStyle(
+            color: Color(0xFF49120F),
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF49120F)),
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF49120F)),
           onPressed: () {
             Navigator.pushAndRemoveUntil(
               context,
@@ -462,7 +507,7 @@ class _SearchPageState extends State<SearchPage> {
       body: Column(
         children: [
           _buildSearchBar(),
-          // 🔥 THANH TÌM KIẾM VÀ LỌC - CHỈ HIỆN SAU KHI CÓ KẾT QUẢ
+          //  THANH TÌM KIẾM VÀ LỌC - CHỈ HIỆN SAU KHI CÓ KẾT QUẢ
           if (hasSearched && !isSearching)
             _buildSearchAndFilterBar(),
           Expanded(child: _buildBody()),
@@ -472,7 +517,7 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  // 🔥 THANH TÌM KIẾM VÀ LỌC - ĐẸP HƠN, NẰM TRONG MỘT HÀNG
+  //  THANH TÌM KIẾM VÀ LỌC - ĐẸP HƠN, NẰM TRONG MỘT HÀNG
   Widget _buildSearchAndFilterBar() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -490,7 +535,7 @@ class _SearchPageState extends State<SearchPage> {
       ),
       child: Row(
         children: [
-          // 🔥 Ô tìm kiếm (chiếm phần lớn)
+          //  Ô tìm kiếm (chiếm phần lớn)
           Expanded(
             flex: 3,
             child: Container(
@@ -528,7 +573,7 @@ class _SearchPageState extends State<SearchPage> {
             ),
           ),
           const SizedBox(width: 12),
-          // 🔥 Dropdown sắp xếp
+          //  Dropdown sắp xếp
           Container(
             height: 45,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -556,7 +601,7 @@ class _SearchPageState extends State<SearchPage> {
             ),
           ),
           const SizedBox(width: 8),
-          // 🔥 Nút xóa lọc (chỉ hiện khi có filter đang áp dụng)
+          //  Nút xóa lọc (chỉ hiện khi có filter đang áp dụng)
           if (searchKeyword.isNotEmpty || selectedSort != 'Mặc định')
             GestureDetector(
               onTap: _resetFilters,
@@ -954,7 +999,7 @@ class _SearchPageState extends State<SearchPage> {
                 ],
                 const Divider(height: 1),
                 const SizedBox(height: 14),
-                // 🔥 Hàng giá và nút thêm số lượng
+                //  Hàng giá và nút thêm số lượng
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -963,7 +1008,7 @@ class _SearchPageState extends State<SearchPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 🔥 Giá gốc gạch ngang + badge giảm giá (nếu có KM)
+                        //  Giá gốc gạch ngang + badge giảm giá (nếu có KM)
                         if (giaGiam < giaGoc)
                           Row(
                             children: [
@@ -995,7 +1040,7 @@ class _SearchPageState extends State<SearchPage> {
                               ),
                             ],
                           ),
-                        // 🔥 Giá giảm (to, đậm, màu cam)
+                        //  Giá giảm (to, đậm, màu cam)
                         Text(
                           '${_formatTien(gia)} VND/đêm',
                           style: const TextStyle(
@@ -1053,7 +1098,7 @@ class _SearchPageState extends State<SearchPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                // 🔥 Nút xem chi tiết (nằm dưới cùng, bên phải)
+                //  Nút xem chi tiết (nằm dưới cùng, bên phải)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -1099,12 +1144,12 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-// 🔥 Thêm hàm điều hướng đến trang chi tiết phòng
+//  Thêm hàm điều hướng đến trang chi tiết phòng
   void _navigateToRoomDetail(dynamic room) async {
-    // 🔥 Lấy số phòng trống từ API
+    //  Lấy số phòng trống từ API
     int soPhongTrongTheoNgay = room['soPhongTrong'] ?? 0;
 
-    // 🔥 Chuyển đổi dữ liệu từ API sang model LoaiPhong (phiên bản mới)
+    //  Chuyển đổi dữ liệu từ API sang model LoaiPhong (phiên bản mới)
     LoaiPhong loaiPhong = LoaiPhong(
       maLoaiPhong: room['MaLoaiPhong'] ?? 0,
       tenLoaiPhong: room['TenLoaiPhong'] ?? '',
@@ -1118,7 +1163,7 @@ class _SearchPageState extends State<SearchPage> {
           ?.map((e) => Phong.fromJson(e as Map<String, dynamic>))
           .toList() ?? [],
 
-      // 🔥 THAY ĐỔI: Dùng giaPhong và giaGiam thay vì bangGias
+      //  THAY ĐỔI: Dùng giaPhong và giaGiam thay vì bangGias
       giaPhong: NumberParser.toDouble(room['GiaPhong'] ?? 0),
       giaGiam: room['GiaGiam'] != null
           ? NumberParser.toDouble(room['GiaGiam'])
@@ -1128,11 +1173,11 @@ class _SearchPageState extends State<SearchPage> {
           ?.map((e) => TienNghi.fromJson(e as Map<String, dynamic>))
           .toList() ?? [],
 
-      // 🔥 THÊM: Mã khuyến mãi nếu có
+      //  THÊM: Mã khuyến mãi nếu có
       maKM: room['MaKM'],
     );
 
-    // 🔥 Điều hướng và chờ kết quả trả về
+    //  Điều hướng và chờ kết quả trả về
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -1143,17 +1188,20 @@ class _SearchPageState extends State<SearchPage> {
       ),
     );
 
-    // 🔥 Nếu có thay đổi, reload giỏ hàng
+    //  Nếu có thay đổi, reload giỏ hàng
     if (result == true) {
+      _lastReload = null; // Force reload lần sau
       final updatedCart = await CartService.loadCart();
-      setState(() {
-        gioPhong = updatedCart;
-      });
+      if (mounted) {
+        setState(() {
+          gioPhong = updatedCart;
+        });
+      }
     }
   }
 
 
-  void _chuyenDenXacNhanDatPhong() {
+  Future<void> _chuyenDenXacNhanDatPhong() async {
     List<Map<String, dynamic>> selectedRooms = [];
 
     gioPhong.forEach((maLoai, item) {
@@ -1174,7 +1222,7 @@ class _SearchPageState extends State<SearchPage> {
       }
     });
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => BookingConfirmPage(
@@ -1186,6 +1234,13 @@ class _SearchPageState extends State<SearchPage> {
         ),
       ),
     );
+    _lastReload = null;
+    final updatedCart = await CartService.loadCart();
+    if (mounted) {
+      setState(() {
+        gioPhong = updatedCart;
+      });
+    }
   }
 
   void _showGioPhongPopup() {
@@ -1382,7 +1437,7 @@ class _SearchPageState extends State<SearchPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Divider(),
-              // 🔥 Wrap tự động xuống dòng + cuộn dọc nếu quá cao
+              //  Wrap tự động xuống dòng + cuộn dọc nếu quá cao
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.5, // Tối đa 50% màn hình

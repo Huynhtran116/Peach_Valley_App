@@ -321,7 +321,7 @@ class _ServiceGroupDetailPageState extends State<ServiceGroupDetailPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF49120F)),
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,

@@ -31,14 +31,14 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Row(
                 children: [
-                  _iconBtn(Icons.arrow_back, () {
+                  _iconBtn(Icons.arrow_back_ios, () {
                     Navigator.pop(context);
                   }),
                   const Expanded(
                     child: Center(
                       child: Text(
                         "Chi tiết đặt phòng",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Color(0xFF49120F),fontWeight: FontWeight.bold , fontSize: 18),
                       ),
                     ),
                   ),

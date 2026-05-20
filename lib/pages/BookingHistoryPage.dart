@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import 'DanhGiaPage.dart';
 import 'HomePage.dart';
 import 'SearchPage.dart';
 
@@ -11,7 +12,7 @@ class BookingHistoryPage extends StatefulWidget {
   State<BookingHistoryPage> createState() => _BookingHistoryPageState();
 }
 
-class _BookingHistoryPageState extends State<BookingHistoryPage> {
+class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBindingObserver {
   List<dynamic> allBookings = []; // Lưu tất cả booking
   List<dynamic> filteredBookings = []; // Lưu booking đã lọc
   bool isLoading = true;
@@ -19,11 +20,38 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
 
   // Biến lọc
   int selectedStatus = -1; // -1: Tất cả, 0: Chờ xác nhận, 1: Đã xác nhận, 2: Đang ở, 3: Đã trả phòng, 4: Đã hủy
+  DateTime? _lastReload;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     fetchBookings();
+  }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reloadIfNeeded();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reloadIfNeeded();
+  }
+
+  Future<void> _reloadIfNeeded() async {
+    final now = DateTime.now();
+    if (_lastReload == null || now.difference(_lastReload!).inSeconds > 30) {
+      _lastReload = now;
+      fetchBookings();
+    }
   }
 
   Future<void> fetchBookings() async {
@@ -424,8 +452,9 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
         title: const Text("Lịch sử đặt phòng",
-            style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold)),
+            style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold , fontSize: 18)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF49120F), size: 20),
           onPressed: () {
@@ -640,6 +669,7 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
       child: Column(
         children: [
           // Header
+          // Header
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -649,6 +679,7 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // Bên trái: Mã ĐP + Ngày đặt
                 Row(
                   children: [
                     Container(
@@ -672,51 +703,23 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
                     ),
                   ],
                 ),
+
+                // Bên phải: Các nút hành động (THEO STYLE SHOPEE)
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _tinhTrangColor(tinhTrang).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _tinhTrangColor(tinhTrang).withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(_tinhTrangIcon(tinhTrang), size: 14, color: _tinhTrangColor(tinhTrang)),
-                          const SizedBox(width: 4),
-                          Text(tinhTrangText,
-                              style: TextStyle(color: _tinhTrangColor(tinhTrang), fontSize: 12, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
+                    // NÚT TRẠNG THÁI (giữ nguyên style cũ)
+                    _buildTrangThaiBadge(tinhTrang, tinhTrangText),
+
+                    // NÚT ĐÁNH GIÁ (nếu đã check-out)
+                    if (tinhTrang == 3) ...[
+                      const SizedBox(width: 8),
+                      _buildDanhGiaButtonShopee(booking),
+                    ],
+
+                    // NÚT HỦY (nếu có thể hủy)
                     if (canCancel) ...[
                       const SizedBox(width: 8),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => cancelBooking(maDatPhong),
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.red.withOpacity(0.3)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(Icons.cancel, size: 14, color: Colors.red),
-                                SizedBox(width: 4),
-                                Text('Hủy',
-                                    style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                      _buildHuyButtonShopee(maDatPhong),
                     ],
                   ],
                 ),
@@ -822,6 +825,161 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+  //
+  // 🔥 Badge trạng thái - Style cũ (giữ nguyên)
+  Widget _buildTrangThaiBadge(int tinhTrang, String tinhTrangText) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: _tinhTrangColor(tinhTrang).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _tinhTrangColor(tinhTrang).withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_tinhTrangIcon(tinhTrang), size: 13, color: _tinhTrangColor(tinhTrang)),
+          const SizedBox(width: 4),
+          Text(
+            tinhTrangText,
+            style: TextStyle(
+              color: _tinhTrangColor(tinhTrang),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🔥 Nút Đánh giá - Style Shopee
+  Widget _buildDanhGiaButtonShopee(dynamic booking) {
+    final daDanhGia = booking['da_danh_gia'] ?? false;
+    final saoDanhGia = booking['SaoDanhGia'] ?? 0;
+
+    if (daDanhGia) {
+      // ✅ ĐÃ ĐÁNH GIÁ - Hiển thị sao + check xanh (đã khóa)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.green.shade50, // Nền xanh nhạt
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.green.shade200), // Viền xanh
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star, size: 13, color: Colors.amber.shade600),
+            const SizedBox(width: 3),
+            Text(
+              '$saoDanhGia',
+              style: TextStyle(
+                color: Colors.green.shade700,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.check_circle, size: 12, color: Colors.green.shade600), // Thêm check xanh
+          ],
+        ),
+      );
+    }
+
+    // ⭐ CHƯA ĐÁNH GIÁ - Nút viền cam (style Shopee)
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          String? tenLoaiPhong;
+          final phongs = booking['phongs'] as List? ?? [];
+          if (phongs.isNotEmpty) {
+            tenLoaiPhong = phongs[0]['TenLoaiPhong']?.toString();
+          }
+
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DanhGiaPage(
+                maDatPhong: booking['MaDatPhong'],
+                tenLoaiPhong: tenLoaiPhong,
+                ngayTraPhong: DateTime.tryParse(booking['NgayTraPhong']?.toString() ?? ''),
+              ),
+            ),
+          );
+
+          if (result == true && mounted) {
+            // 🔥 CẬP NHẬT NGAY TẠI CHỖ
+            setState(() {
+              booking['da_danh_gia'] = true;
+              booking['SaoDanhGia'] = result['sao'] ?? 5; // Nếu DanhGiaPage trả về sao
+            });
+
+            // Vẫn fetch lại để đồng bộ với server
+            await fetchBookings();
+          }
+        },
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFFC97A3E), width: 1),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.star_outline, size: 12, color: Color(0xFFC97A3E)),
+              SizedBox(width: 3),
+              Text(
+                'Đánh giá',
+                style: TextStyle(
+                  color: Color(0xFFC97A3E),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  // 🔥 Nút Hủy - Style Shopee
+  Widget _buildHuyButtonShopee(int maDatPhong) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => cancelBooking(maDatPhong),
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.red.shade300, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.close, size: 12, color: Colors.red.shade400),
+              const SizedBox(width: 3),
+              Text(
+                'Hủy',
+                style: TextStyle(
+                  color: Colors.red.shade400,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

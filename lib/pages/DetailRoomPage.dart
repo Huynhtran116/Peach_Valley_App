@@ -200,7 +200,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF49120F)),
           onPressed: () => Navigator.pop(context, true),
         ),
         centerTitle: true,

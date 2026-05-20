@@ -25,7 +25,7 @@ class _DatePageState extends State<DatePage> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Row(
                 children: [
-                  _iconBtn(Icons.arrow_back, () {
+                  _iconBtn(Icons.arrow_back_ios, () {
                     Navigator.pop(context);
                   }),
                   const Expanded(
@@ -33,8 +33,9 @@ class _DatePageState extends State<DatePage> {
                       child: Text(
                         "Chọn ngày",
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF49120F),
                         ),
                       ),
                     ),

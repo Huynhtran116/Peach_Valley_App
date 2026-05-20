@@ -24,7 +24,7 @@ class ServiceDetailPage extends StatelessWidget {
 
         /// 🔥 BACK BUTTON
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF49120F)),
           onPressed: () {
             Navigator.pop(context);
           },

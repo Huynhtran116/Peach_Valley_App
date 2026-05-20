@@ -47,6 +47,7 @@ class ApiService {
     return headers;
   }
 
+  // ==================== GET ====================
   static Future<dynamic> get(String endpoint) async {
     final headers = await _getHeaders();
     final response = await http.get(
@@ -62,6 +63,7 @@ class ApiService {
     }
   }
 
+  // ==================== POST ====================
   static Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
     final headers = await _getHeaders();
     final response = await http.post(
@@ -78,6 +80,7 @@ class ApiService {
     }
   }
 
+  // ==================== PUT ====================
   static Future<dynamic> put(String endpoint, Map<String, dynamic> data) async {
     final headers = await _getHeaders();
     final response = await http.put(
@@ -94,6 +97,44 @@ class ApiService {
     }
   }
 
+  // ==================== DELETE (THÊM MỚI) ====================
+  static Future<dynamic> delete(String endpoint) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: headers,
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      // 204 No Content - không có body
+      if (response.body.isEmpty) {
+        return {'success': true, 'message': 'Xóa thành công'};
+      }
+      return json.decode(response.body);
+    } else {
+      final body = json.decode(response.body);
+      throw Exception(body['message'] ?? 'Lỗi: ${response.statusCode}');
+    }
+  }
+
+  // ==================== PATCH (THÊM NẾU CẦN) ====================
+  static Future<dynamic> patch(String endpoint, Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.patch(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: headers,
+      body: json.encode(data),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      final body = json.decode(response.body);
+      throw Exception(body['message'] ?? 'Lỗi: ${response.statusCode}');
+    }
+  }
+
+  // ==================== GET USER PROFILE ====================
   static Future<Map<String, dynamic>> getUserProfile() async {
     return await get('mobile/user-profile');
   }

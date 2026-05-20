@@ -166,7 +166,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Row(
                 children: [
-                  _iconBtn(Icons.arrow_back, () {
+                  _iconBtn(Icons.arrow_back_ios, () {
                     Navigator.pop(context, false);
                   }),
                   const Expanded(
@@ -174,7 +174,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                       child: Text(
                         "Thông tin cá nhân",
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

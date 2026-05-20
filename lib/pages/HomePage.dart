@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/danh_gia.dart';
 import '../models/loai_phong.dart';
 import '../services/khuyen_mai_service.dart';
 import '../utils/number_parser.dart';
@@ -12,6 +13,7 @@ import 'DatePickerPage.dart';
 import 'DetailRoomPage.dart';
 import 'AccountPage.dart';
 import 'DetailSerVicePage.dart';
+import '../services/danh_gia_service.dart';
 import 'PromotionPage.dart';
 import 'RoomListPage.dart';
 import 'SearchPage.dart';
@@ -29,7 +31,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   int _currentIndex = 0;
 
   // Biến user
@@ -47,14 +49,21 @@ class _HomePageState extends State<HomePage> {
   List<KhuyenMaiModel> danhSachKhuyenMai = [];
   bool isLoadingPromos = true;
 
+  // 🔥 THÊM: Biến cho đánh giá
+  List<DanhGiaModel> danhSachDanhGia = [];
+  double diemTrungBinh = 0.0;
+  int tongDanhGia = 0;
+  Map<int, int> soLuongTheoSao = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
+  bool isLoadingDanhGia = true;
+  DateTime? _lastDanhGiaReload;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // 🔥 Theo dõi app lifecycle
     _checkAndFixData(); // Thêm hàm kiểm tra dữ liệu lỗi
     loadUserInfo();
-    fetchLoaiPhong();
-    fetchDichVu();
-    fetchKhuyenMai();
+    _loadAllData(); // 🔥 Load song song
   }
 
   @override
@@ -62,8 +71,27 @@ class _HomePageState extends State<HomePage> {
     super.didChangeDependencies();
     // Load lại mỗi khi quay lại (quan trọng!)
     loadUserInfo();
+    _reloadDanhGiaIfNeeded();
   }
+  // 🔥 Load tất cả song song
+  Future<void> _loadAllData() async {
+    await Future.wait([
+      fetchLoaiPhong(),
+      fetchDichVu(),
+      fetchKhuyenMai(),
+      fetchDanhGia(),
+    ]);
+  }
+  // 🔥 Reload đánh giá nếu cần
+  Future<void> _reloadDanhGiaIfNeeded() async {
+    final now = DateTime.now();
 
+    if (_lastDanhGiaReload == null ||
+        now.difference(_lastDanhGiaReload!).inSeconds > 30) {
+      _lastDanhGiaReload = now;
+      fetchDanhGia(); // Không await để không block UI
+    }
+  }
 // Hàm kiểm tra và fix dữ liệu lỗi
   Future<void> _checkAndFixData() async {
     final prefs = await SharedPreferences.getInstance();
@@ -253,8 +281,37 @@ class _HomePageState extends State<HomePage> {
       });
     }
   }
+  Future<void> fetchDanhGia() async {
+    final stopwatch = Stopwatch()..start();
+    print('⏱️ [ĐÁNH GIÁ] Bắt đầu fetch...');
 
-  // Logout
+    try {
+      final result = await DanhGiaService.layTatCaDanhGia();
+      stopwatch.stop();
+      print('⏱️ [ĐÁNH GIÁ] Fetch xong trong ${stopwatch.elapsedMilliseconds}ms');
+      print('⏱️ [ĐÁNH GIÁ] Số lượng: ${result['tongDanhGia']}');
+
+      if (!mounted) return;
+
+      setState(() {
+        danhSachDanhGia = (result['danhSach'] as List)
+            .take(5)
+            .cast<DanhGiaModel>()
+            .toList();
+        diemTrungBinh = result['diemTrungBinh'] ?? 0.0;
+        tongDanhGia = result['tongDanhGia'] ?? 0;
+        soLuongTheoSao = Map<int, int>.from(result['soLuongTheoSao'] ?? {});
+        isLoadingDanhGia = false;
+      });
+    } catch (e) {
+      stopwatch.stop();
+      print('❌ Lỗi load đánh giá sau ${stopwatch.elapsedMilliseconds}ms: $e');
+      if (!mounted) return;
+      setState(() => isLoadingDanhGia = false);
+    }
+  }
+
+
   // Logout - Thêm dialog xác nhận
   Future<void> _logout() async {
     // 🔥 Hiển thị dialog xác nhận
@@ -338,7 +395,7 @@ class _HomePageState extends State<HomePage> {
     _getAccountPage(), // Màn hình Account (tùy theo login)
   ];
 
-  // Màn hình Message - yêu cầu login nếu chưa đăng nhập
+
   // Màn hình Lịch sử đặt phòng - yêu cầu login nếu chưa đăng nhập
   Widget _getHistoryPage() {
     if (!isLoggedIn) {
@@ -376,6 +433,7 @@ class _HomePageState extends State<HomePage> {
   String _formatVND(dynamic amount) {
     return NumberParser.formatVND(amount);
   }
+
 
   // Widget hiển thị khi chưa đăng nhập
   Widget _buildLoginRequiredPage({
@@ -440,6 +498,295 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+  // 🔥 THÊM VÀO CLASS _HomePageState
+  Widget _buildStarRating(double rating, {double size = 16, Color? color}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        if (index < rating.floor()) {
+          return Icon(Icons.star, size: size, color: color ?? Colors.amber);
+        } else if (index < rating && rating % 1 >= 0.5) {
+          return Icon(Icons.star_half, size: size, color: color ?? Colors.amber);
+        } else {
+          return Icon(Icons.star_border, size: size, color: color ?? Colors.amber);
+        }
+      }),
+    );
+  }
+
+  // 🔥 THÊM VÀO CLASS _HomePageState
+  Widget _buildDanhGiaSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Đánh giá từ khách hàng",
+                style: TextStyle(
+                  color: Color(0xFF6F1D01),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  // TODO: Mở trang xem tất cả đánh giá
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Xem tất cả đánh giá')),
+                  );
+                },
+                child: const Text(
+                  "Xem tất cả",
+                  style: TextStyle(
+                    color: Color(0xFFC97A3E),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 15),
+
+        if (isLoadingDanhGia)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(color: Color(0xFFC97A3E)),
+            ),
+          )
+        else ...[
+          // 🔥 Tổng quan đánh giá
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF49120F), Color(0xFFC97A3E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: tongDanhGia == 0
+                ? const Center(
+              child: Text(
+                'Chưa có đánh giá nào',
+                style: TextStyle(color: Colors.white70),
+              ),
+            )
+                : Row(
+              children: [
+                // Điểm trung bình
+                Column(
+                  children: [
+                    Text(
+                      diemTrungBinh.toStringAsFixed(1),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 42,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    _buildStarRating(diemTrungBinh, size: 18, color: Colors.amber),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$tongDanhGia đánh giá',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 20),
+                // Thanh tỉ lệ các sao
+                Expanded(
+                  child: Column(
+                    children: List.generate(5, (index) {
+                      int star = 5 - index;
+                      int count = soLuongTheoSao[star] ?? 0;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              child: Text(
+                                '$star',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                            const Icon(Icons.star, color: Colors.amber, size: 12),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: tongDanhGia > 0 ? count / tongDanhGia : 0,
+                                  backgroundColor: Colors.white.withOpacity(0.2),
+                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
+                                  minHeight: 6,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            SizedBox(
+                              width: 24,
+                              child: Text(
+                                '$count',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 15),
+
+          // 🔥 Danh sách đánh giá gần đây
+          if (danhSachDanhGia.isNotEmpty)
+            SizedBox(
+              height: 200,
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                scrollDirection: Axis.horizontal,
+                itemCount: danhSachDanhGia.length,
+                itemBuilder: (context, index) {
+                  final dg = danhSachDanhGia[index];
+                  return _buildDanhGiaCard(dg);
+                },
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+  // 🔥 THÊM VÀO CLASS _HomePageState
+  Widget _buildDanhGiaCard(DanhGiaModel dg) {
+    return Container(
+      width: 300,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Avatar + Tên + Sao
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: const Color(0xFFC97A3E).withOpacity(0.1),
+                child: Text(
+                  dg.avatarChar,
+                  style: const TextStyle(
+                    color: Color(0xFFC97A3E),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dg.tenKhachHang ?? 'Khách hàng',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        _buildStarRating(dg.sao.toDouble(), size: 12),
+                        const SizedBox(width: 4),
+                        Text(
+                          dg.ngayDanhGiaFormatted,
+                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Loại phòng đã đặt
+          if (dg.tenLoaiPhong != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8BE97).withOpacity(0.3),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                dg.tenLoaiPhong!,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF49120F)),
+              ),
+            ),
+          const SizedBox(height: 6),
+          // Nội dung đánh giá
+          Expanded(
+            child: Text(
+              dg.moTa ?? 'Không có nội dung',
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: (dg.moTa == null || dg.moTa!.isEmpty)
+                    ? Colors.grey
+                    : Colors.black87,
+                height: 1.4,
+                fontStyle: (dg.moTa == null || dg.moTa!.isEmpty)
+                    ? FontStyle.italic
+                    : FontStyle.normal,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -724,6 +1071,8 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           const SizedBox(height: 15),
+          // danh gia
+          _buildDanhGiaSection(),
         ],
       ),
     );
@@ -1885,6 +2234,8 @@ class _HomePageState extends State<HomePage> {
     });
   }
 }
+
+
 
 class DashedLinePainter extends CustomPainter {
   @override
