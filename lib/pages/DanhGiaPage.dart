@@ -71,20 +71,17 @@ class _DanhGiaPageState extends State<DanhGiaPage> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         centerTitle: true,
         title: const Text(
-          "Đánh giá khách sạn",
-          style: TextStyle(
-            color: Color(0xFF49120F),
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+          "Đánh giá Peach Valley",
+          style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        backgroundColor: const Color(0xFFFFFFFF),
+        backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Color(0xFF49120F)),
       ),
       body: SingleChildScrollView(
@@ -92,69 +89,49 @@ class _DanhGiaPageState extends State<DanhGiaPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
-            // Icon
+            // 🏨 Icon khách sạn
             Container(
-              width: 80,
-              height: 80,
+              width: 90, height: 90,
               decoration: BoxDecoration(
-                color: const Color(0xFFC97A3E).withOpacity(0.1),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF49120F), Color(0xFFC97A3E)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFFC97A3E).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 4)),
+                ],
               ),
-              child: const Icon(
-                Icons.rate_review_outlined,
-                size: 40,
-                color: Color(0xFFC97A3E),
-              ),
+              child: const Icon(Icons.hotel, size: 45, color: Colors.white),
             ),
             const SizedBox(height: 16),
 
             // Tiêu đề
-            const Text(
-              'Đánh giá của bạn',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF49120F),
-              ),
-            ),
+            const Text('Peach Valley',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF49120F))),
             const SizedBox(height: 8),
-
-            // Thông tin đặt phòng
-            if (widget.tenLoaiPhong != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8BE97).withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  widget.tenLoaiPhong!,
-                  style: const TextStyle(
-                    color: Color(0xFF49120F),
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 24),
+            Text('Mã ĐP: #${widget.maDatPhong}',
+                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 28),
 
             // Chọn sao
-            const Text(
-              'Bạn thấy khách sạn thế nào?',
-              style: TextStyle(fontSize: 16, color: Colors.black87),
-            ),
+            const Text('Trải nghiệm của bạn thế nào?',
+                style: TextStyle(fontSize: 16, color: Colors.black87)),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(5, (index) {
                 return GestureDetector(
                   onTap: () => setState(() => _sao = index + 1),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
                     child: Icon(
                       index < _sao ? Icons.star : Icons.star_border,
-                      size: 48,
+                      size: 44,
                       color: index < _sao ? Colors.amber : Colors.grey.shade300,
                     ),
                   ),
@@ -162,27 +139,16 @@ class _DanhGiaPageState extends State<DanhGiaPage> {
               }),
             ),
             const SizedBox(height: 8),
-            Text(
-              _getSaoText(_sao),
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.amber.shade700,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 24),
+            Text(_getSaoText(_sao),
+                style: TextStyle(fontSize: 15, color: Colors.amber.shade700, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 28),
 
             // Nhập nội dung
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                  ),
-                ],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
               ),
               child: TextField(
                 controller: _moTaController,
@@ -208,24 +174,13 @@ class _DanhGiaPageState extends State<DanhGiaPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFC97A3E),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  disabledBackgroundColor: Colors.grey,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isSubmitting
-                    ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-                    : const Text(
-                  'Gửi đánh giá',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                    ? const SizedBox(width: 24, height: 24,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Gửi đánh giá',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
           ],

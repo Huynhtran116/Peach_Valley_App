@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'ForgotPasswordPage.dart';
 import 'HomePage.dart';
 import 'SignUpPage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -180,11 +181,23 @@ class _SignInPageState extends State<SignInPage> {
                   _buildInput("Email", Icons.email, controller: emailController),
                   _buildInput("Password", Icons.lock, isPassword: true, controller: passwordController),
                   const SizedBox(height: 10),
-                  const Align(
+                  Align(
                     alignment: Alignment.centerRight,
-                    child: Text(
-                      "Quên mật khẩu?",
-                      style: TextStyle(color: Color(0xFF49120F)),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ForgotPasswordPage()),
+                        );
+                      },
+                      child: const Text(
+                        "Quên mật khẩu?",
+                        style: TextStyle(
+                          color: Color(0xFFC97A3E), // 👈 Đổi màu cam cho nổi bật
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -233,23 +246,10 @@ class _SignInPageState extends State<SignInPage> {
                       Expanded(
                         child: Divider(color: Color(0xFF49120F).withOpacity(0.2)),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          "hoặc đăng nhập với",
-                          style: TextStyle(color: Color(0xFF49120F)),
-                        ),
-                      ),
                       Expanded(
                         child: Divider(color: Color(0xFF49120F).withOpacity(0.2)),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: _socialButton(() {
-                      print("Google Sign In 🔥");
-                    }),
                   ),
                   const SizedBox(height: 30),
                   Center(

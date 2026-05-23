@@ -321,6 +321,7 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
 
   Future<void> _datDichVu() async {
     if (gioHang.isEmpty) {
+      print('🔴 [ĐẶT DV] Giỏ hàng trống');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vui lòng chọn ít nhất 1 dịch vụ'), backgroundColor: Colors.orange),
       );
@@ -330,6 +331,37 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
     setState(() => isOrdering = true);
 
     try {
+      // 🔥 BƯỚC 1: Lấy MaCTDP từ API
+      print('🟢 [ĐẶT DV] Lấy thông tin đặt phòng...');
+      var bookingResponse = await ApiService.get('dat-phong/${widget.maDatPhong}');
+      print('🟢 [ĐẶT DV] Booking response: $bookingResponse');
+
+      int maCTDP = 0;
+      if (bookingResponse['success'] == true && bookingResponse['data'] != null) {
+        var data = bookingResponse['data'];
+        var chiTiet = data['chi_tiet_dat_phong'] as List? ?? [];
+        if (chiTiet.isNotEmpty) {
+          // Tìm MaCTDP theo số phòng
+          for (var ct in chiTiet) {
+            if (ct['phong'] != null && ct['phong']['SoPhong']?.toString() == widget.soPhong) {
+              maCTDP = ct['MaCTDP'] ?? 0;
+              break;
+            }
+          }
+          // Nếu không tìm thấy, lấy cái đầu tiên
+          if (maCTDP == 0) {
+            maCTDP = chiTiet.first['MaCTDP'] ?? 0;
+          }
+        }
+      }
+
+      print('🟢 [ĐẶT DV] MaCTDP: $maCTDP');
+
+      if (maCTDP == 0) {
+        throw Exception('Không tìm thấy mã chi tiết đặt phòng');
+      }
+
+      // 🔥 BƯỚC 2: Tạo items
       List<Map<String, dynamic>> items = [];
       for (var item in gioHang) {
         DichVuModel dichVu = item['dichVu'];
@@ -342,18 +374,25 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
       String thoiGian = "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')} "
           "${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}:00";
 
+      // 🔥 BƯỚC 3: Gửi request
+      print('🟢 [ĐẶT DV] Gửi: MaCTDP=$maCTDP, Items=$items');
+
       var response = await ApiService.post('su-dung-dich-vu', {
-        'MaDatPhong': widget.maDatPhong,
+        'MaCTDP': maCTDP,  // 👈 DÙNG MaCTDP
         'ThoiGian': thoiGian,
         'items': items,
       });
 
+      print('🟢 [ĐẶT DV] Response: $response');
+
       if (response['success'] == true) {
+        print('✅ [ĐẶT DV] Thành công!');
         _showSuccessDialog();
       } else {
         throw Exception(response['message']);
       }
     } catch (e) {
+      print('🔴 [ĐẶT DV] LỖI: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Lỗi: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.red),
       );
@@ -877,7 +916,7 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC97A3E), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       child: isOrdering
                           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Hoàn tất đăng ký →', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                          : const Text('Hoàn tất đăng ký', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

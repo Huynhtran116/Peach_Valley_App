@@ -133,6 +133,10 @@ class _PaymentPageState extends State<PaymentPage> {
       } else {
         print('❌ Chưa đăng nhập - Đặt phòng với tư cách khách');
       }
+      if (widget.selectedKhuyenMai != null) {
+        requestData['MaKM'] = widget.selectedKhuyenMai!['MaKM'];
+        print('🟢 Gửi kèm MaKM: ${widget.selectedKhuyenMai!['MaKM']}');
+      }
 
       print('📝 Request đặt phòng: $requestData');
 

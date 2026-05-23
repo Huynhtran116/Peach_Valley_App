@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'BookingHistoryPage.dart';
+import 'ChangePasswordPage.dart';
 import 'HomePage.dart';
 import 'KhoKhuyenMaiPage.dart';
 import 'PersonalDataPage.dart';
@@ -363,11 +364,8 @@ class _AccountPageState extends State<AccountPage> {
                       icon: Icons.settings,
                       title: "Cài đặt",
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Tính năng đang phát triển"),
-                            backgroundColor: Color(0xFFC97A3E),
-                          ),
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordPage())
+
                         );
                       },
                     ),

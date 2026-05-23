@@ -188,26 +188,12 @@ class _SignUpPageState extends State<SignUpPage> {
                       Expanded(
                         child: Divider(color: Color(0xFF49120F).withOpacity(0.2)),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          "hoặc đăng ký với",
-                          style: TextStyle(color: Color(0xFF49120F)),
-                        ),
-                      ),
                       Expanded(
                         child: Divider(color: Color(0xFF49120F).withOpacity(0.2)),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 20),
-
-                  Center(
-                    child: _socialButton(() {
-                      print("Google Sign up 🔥");
-                    }),
-                  ),
 
                   const SizedBox(height: 30),
 

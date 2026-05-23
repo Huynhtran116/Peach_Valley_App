@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import 'DanhGiaPage.dart';
 import 'HomePage.dart';
 import 'SearchPage.dart';
+import 'dart:convert';
 
 class BookingHistoryPage extends StatefulWidget {
   const BookingHistoryPage({super.key});
@@ -50,6 +51,7 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBin
     final now = DateTime.now();
     if (_lastReload == null || now.difference(_lastReload!).inSeconds > 30) {
       _lastReload = now;
+      if (!mounted) return;
       fetchBookings();
     }
   }
@@ -59,12 +61,14 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBin
     int maKH = prefs.getInt('user_maKH') ?? 0;
 
     if (maKH == 0) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       return;
     }
 
     try {
       var response = await ApiService.get('khach-hang/$maKH/dat-phong');
+      if (!mounted) return;
       setState(() {
         allBookings = response['data'] ?? [];
         _applyFilter(); // Áp dụng bộ lọc
@@ -72,6 +76,7 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBin
       });
     } catch (e) {
       print('❌ Lỗi load lịch sử: $e');
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
@@ -658,68 +663,46 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBin
     int maDatPhong = booking['MaDatPhong'];
     DateTime ngayNhanPhong = DateTime.parse(booking['NgayNhanPhong']);
     bool canCancel = _canCancelBooking(tinhTrang, ngayNhanPhong);
+    var chiTietTien = booking['chi_tiet_tien'] as List? ?? [];
+    var dichVu = booking['dich_vu'] as List? ?? [];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 1))],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          // Header
+          // HEADER - Trạng thái + Mã ĐP
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: _tinhTrangColor(tinhTrang).withOpacity(0.05),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.1))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Bên trái: Mã ĐP + Ngày đặt
                 Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFC97A3E).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.hotel, color: Color(0xFFC97A3E), size: 22),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Mã ĐP: #${booking['MaDatPhong']}",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF49120F))),
-                        Text(_formatDate(booking['NgayDat']),
-                            style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                      ],
-                    ),
+                    Text("Mã ĐP: #$maDatPhong",
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF49120F))),
+                    const SizedBox(width: 8),
+                    Text(_formatDate(booking['NgayDat']),
+                        style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   ],
                 ),
-
-                // Bên phải: Các nút hành động (THEO STYLE SHOPEE)
                 Row(
                   children: [
-                    // NÚT TRẠNG THÁI (giữ nguyên style cũ)
                     _buildTrangThaiBadge(tinhTrang, tinhTrangText),
-
-                    // NÚT ĐÁNH GIÁ (nếu đã check-out)
                     if (tinhTrang == 3) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       _buildDanhGiaButtonShopee(booking),
-                    ],
-
-                    // NÚT HỦY (nếu có thể hủy)
-                    if (canCancel) ...[
-                      const SizedBox(width: 8),
-                      _buildHuyButtonShopee(maDatPhong),
                     ],
                   ],
                 ),
@@ -727,100 +710,210 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBin
             ),
           ),
 
-          // Body (giữ nguyên phần còn lại)
+          // BODY
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Ngày nhận - trả
                 Row(
                   children: [
-                    _dateBox("Nhận phòng", _formatDate(booking['NgayNhanPhong'])),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Column(
-                        children: [
-                          Text("$soDem đêm",
-                              style: const TextStyle(fontSize: 11, color: Color(0xFFC97A3E), fontWeight: FontWeight.bold)),
-                          const Icon(Icons.arrow_forward, size: 16, color: Color(0xFFC97A3E)),
-                        ],
-                      ),
+                    const Icon(Icons.calendar_today, size: 14, color: Color(0xFFC97A3E)),
+                    const SizedBox(width: 6),
+                    Text(_formatDate(booking['NgayNhanPhong']),
+                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Icon(Icons.arrow_forward, size: 14, color: Colors.grey),
                     ),
-                    _dateBox("Trả phòng", _formatDate(booking['NgayTraPhong'])),
+                    Text(_formatDate(booking['NgayTraPhong']),
+                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFC97A3E).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text("$soDem đêm",
+                          style: const TextStyle(fontSize: 11, color: Color(0xFFC97A3E), fontWeight: FontWeight.w600)),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                if (phongs.isNotEmpty)
+
+                const SizedBox(height: 10),
+
+                // 🔥 DANH SÁCH PHÒNG - STYLE SHOPEE
+                ...phongs.asMap().entries.map((entry) {
+                  int idx = entry.key;
+                  var p = entry.value;
+                  var tien = chiTietTien.firstWhere(
+                        (t) => t['loai'] == 'phong' && t['ten'] == p['TenLoaiPhong'],
+                    orElse: () => null,
+                  );
+                  double giaGoc = (tien?['giaGoc'] ?? p['GiaGoc'] ?? 0).toDouble();
+                  double giaSauKM = (tien?['giaSauKM'] ?? p['GiaSauKM'] ?? 0).toDouble();
+                  bool coKM = giaSauKM < giaGoc;
+
+                  return Container(
+                    margin: EdgeInsets.only(bottom: idx == phongs.length - 1 ? 0 : 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Icon phòng
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFC97A3E).withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.meeting_room, size: 18, color: Color(0xFFC97A3E)),
+                        ),
+                        const SizedBox(width: 10),
+                        // Tên + số phòng
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(p['TenLoaiPhong'] ?? '',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF49120F))),
+                              const SizedBox(height: 2),
+                              Text('Phòng ${p['SoPhong']}',
+                                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                            ],
+                          ),
+                        ),
+                        // Giá
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (coKM)
+                              Text('${_formatTien(giaGoc)}đ',
+                                  style: const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                      color: Colors.grey, fontSize: 11)),
+                            Text('${_formatTien(giaSauKM)}đ',
+                                style: const TextStyle(
+                                    color: Color(0xFFC97A3E),
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text('/đêm',
+                                style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+
+                // 🔥 DỊCH VỤ
+                if (dichVu.isNotEmpty) ...[
+                  const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE8BE97).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.blue.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withOpacity(0.1)),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ...phongs.take(3).map((p) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
+                        const Text('🛎 Dịch vụ đã dùng',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.blue)),
+                        const SizedBox(height: 6),
+                        ...dichVu.map((dv) => Padding(
+                          padding: const EdgeInsets.only(bottom: 3),
                           child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Icon(Icons.meeting_room, size: 14, color: Color(0xFFC97A3E)),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  "${p['TenLoaiPhong']} (Phòng ${p['SoPhong']})",
-                                  style: const TextStyle(fontSize: 13, color: Color(0xFF49120F)),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
+                              Text('${dv['ten']} ×${dv['soLuong']}',
+                                  style: const TextStyle(fontSize: 12)),
+                              Text('${_formatTien(dv['thanhTien'] ?? 0)}đ',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFFC97A3E))),
                             ],
                           ),
                         )),
-                        if (phongs.length > 3)
-                          Text("+${phongs.length - 3} phòng khác",
-                              style: const TextStyle(fontSize: 11, color: Colors.grey)),
                       ],
                     ),
                   ),
-                const SizedBox(height: 14),
-                if (hoaDon != null && tinhTrang != 4 && hoaDon['TongTien'] > 0)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE8BE97)),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
+                ],
+
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+
+                // 🔥 HÓA ĐƠN - STYLE SHOPEE
+                if (hoaDon != null && tinhTrang != 4) ...[
+                  const SizedBox(height: 8),
+                  if ((hoaDon['PhanTramGiam'] ?? 0) > 0) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _moneyRow("Tổng tiền", hoaDon['TongTien']),
-                        _moneyRow("Đã thanh toán", hoaDon['DaThanhToan'], color: Colors.green),
-                        if ((hoaDon['ConLai'] ?? 0) > 0)
-                          _moneyRow("Còn lại", hoaDon['ConLai'], color: Colors.red),
+                        const Text('Tổng tiền gốc', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        Text('${_formatTien(hoaDon['TongTienGoc'] ?? hoaDon['TongTien'])}đ',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
                       ],
                     ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Voucher ${hoaDon['TenKM'] ?? ''}',
+                            style: const TextStyle(fontSize: 12, color: Colors.green)),
+                        Text('-${hoaDon['PhanTramGiam']}%',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.green)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Tổng thanh toán',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF49120F))),
+                      Text('${_formatTien(hoaDon['TongTien'])}đ',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFC97A3E))),
+                    ],
                   ),
-                if (canCancel)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Đã thanh toán', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text('${_formatTien(hoaDon['DaThanhToan'])}đ',
+                          style: const TextStyle(fontSize: 12, color: Colors.green)),
+                    ],
+                  ),
+                  if ((hoaDon['ConLai'] ?? 0) > 0) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Còn nợ', style: TextStyle(fontSize: 12, color: Colors.red)),
+                        Text('${_formatTien(hoaDon['ConLai'])}đ',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.red)),
+                      ],
+                    ),
+                  ],
+                ],
+
+                // Nút hủy
+                if (canCancel) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => cancelBooking(maDatPhong),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: BorderSide(color: Colors.red.withOpacity(0.3)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
-                      child: Row(
-                        children: const [
-                          Icon(Icons.info_outline, size: 14, color: Colors.orange),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Có thể hủy phòng trước ngày nhận phòng',
-                              style: TextStyle(fontSize: 11, color: Colors.orange),
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: const Text('Hủy đặt phòng', style: TextStyle(fontSize: 13)),
                     ),
                   ),
+                ],
               ],
             ),
           ),
@@ -862,35 +955,27 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBin
     final saoDanhGia = booking['SaoDanhGia'] ?? 0;
 
     if (daDanhGia) {
-      // ✅ ĐÃ ĐÁNH GIÁ - Hiển thị sao + check xanh (đã khóa)
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.green.shade50, // Nền xanh nhạt
+          color: Colors.green.shade50,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.green.shade200), // Viền xanh
+          border: Border.all(color: Colors.green.shade200),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.star, size: 13, color: Colors.amber.shade600),
             const SizedBox(width: 3),
-            Text(
-              '$saoDanhGia',
-              style: TextStyle(
-                color: Colors.green.shade700,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Text('$saoDanhGia',
+                style: TextStyle(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
             const SizedBox(width: 2),
-            Icon(Icons.check_circle, size: 12, color: Colors.green.shade600), // Thêm check xanh
+            Icon(Icons.check_circle, size: 12, color: Colors.green.shade600),
           ],
         ),
       );
     }
 
-    // ⭐ CHƯA ĐÁNH GIÁ - Nút viền cam (style Shopee)
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -912,14 +997,13 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBin
             ),
           );
 
-          if (result == true && mounted) {
-            // 🔥 CẬP NHẬT NGAY TẠI CHỖ
+          // 🔥 SỬA: result là Map, không phải bool
+          if (result != null && mounted) {
+            final sao = result is Map ? (result['sao'] ?? 5) : 5;
             setState(() {
               booking['da_danh_gia'] = true;
-              booking['SaoDanhGia'] = result['sao'] ?? 5; // Nếu DanhGiaPage trả về sao
+              booking['SaoDanhGia'] = sao;
             });
-
-            // Vẫn fetch lại để đồng bộ với server
             await fetchBookings();
           }
         },
@@ -936,14 +1020,8 @@ class _BookingHistoryPageState extends State<BookingHistoryPage> with WidgetsBin
             children: [
               Icon(Icons.star_outline, size: 12, color: Color(0xFFC97A3E)),
               SizedBox(width: 3),
-              Text(
-                'Đánh giá',
-                style: TextStyle(
-                  color: Color(0xFFC97A3E),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Text('Đánh giá',
+                  style: TextStyle(color: Color(0xFFC97A3E), fontSize: 11, fontWeight: FontWeight.w500)),
             ],
           ),
         ),

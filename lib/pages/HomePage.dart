@@ -7,6 +7,7 @@ import '../models/danh_gia.dart';
 import '../models/loai_phong.dart';
 import '../services/khuyen_mai_service.dart';
 import '../utils/number_parser.dart';
+import 'AllReviewsPage.dart';
 import 'AllocationPage.dart';
 import 'BookingHistoryPage.dart';
 import 'DatePickerPage.dart';
@@ -538,9 +539,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
               ),
               GestureDetector(
                 onTap: () {
-                  // TODO: Mở trang xem tất cả đánh giá
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Xem tất cả đánh giá')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AllReviewsPage()),
                   );
                 },
                 child: const Text(
@@ -900,15 +901,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                         ),
                         Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.notifications,
-                                  color: Colors.white),
-                            ),
                             // Nút đăng xuất (chỉ hiển thị khi đã đăng nhập)
                             if (isLoggedIn) ...[
                               const SizedBox(width: 10),
@@ -2117,6 +2109,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
 
                 // Gọi API đổi điểm
                 final result = await KhuyenMaiService.doiBangDiem(maKH, km.maKM);
+                print('🟢 [ĐỔI ĐIỂM] Kết quả API: $result');
 
                 // 🔥 Đóng loading
                 _hideLoadingDialog();
