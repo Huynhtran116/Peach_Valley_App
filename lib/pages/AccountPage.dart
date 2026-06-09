@@ -17,7 +17,7 @@ class AccountPage extends StatefulWidget {
   State<AccountPage> createState() => _AccountPageState();
 }
 
-class _AccountPageState extends State<AccountPage> {
+class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   String userName = 'Khách';
   String userEmail = '';
   int userDiem = 0;
@@ -32,7 +32,19 @@ class _AccountPageState extends State<AccountPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     loadUserInfo();
+  }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      loadUserInfo();
+    }
   }
 
   @override
@@ -203,7 +215,7 @@ class _AccountPageState extends State<AccountPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Đã đăng xuất thành công"),
-          backgroundColor: Colors.green,
+          backgroundColor: Color(0xFFC97A3E),
           duration: Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
         ),

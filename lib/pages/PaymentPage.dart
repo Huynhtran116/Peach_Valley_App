@@ -7,6 +7,8 @@ import 'HomePage.dart';
 import 'SignInPage.dart';
 import 'dart:async';
 import '../services/khuyen_mai_service.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:flutter/services.dart';
 
 class PaymentPage extends StatefulWidget {
   final DateTime checkIn;
@@ -42,7 +44,7 @@ class PaymentPage extends StatefulWidget {
 }
 
 class _PaymentPageState extends State<PaymentPage> {
-  int selectedMethod = 1; // 1: VNPay, 2: Thẻ
+  int selectedMethod = 1; // 1: VNPay, 2: QR
   bool isProcessing = false;
   bool isWaitingPayment = false;
   int? maDatPhongDangCho;
@@ -97,7 +99,6 @@ class _PaymentPageState extends State<PaymentPage> {
     setState(() => isProcessing = true);
 
     try {
-      // Kiểm tra lại trạng thái đăng nhập trước khi đặt phòng
       await _checkLoginStatus();
 
       // Gom loại phòng
@@ -110,7 +111,6 @@ class _PaymentPageState extends State<PaymentPage> {
         return {'MaLoaiPhong': e.key, 'SoLuong': e.value};
       }).toList();
 
-      // Tạo request data
       Map<String, dynamic> requestData = {
         'NgayNhanPhong': _formatDateAPI(widget.checkIn),
         'NgayTraPhong': _formatDateAPI(widget.checkOut),
@@ -119,78 +119,247 @@ class _PaymentPageState extends State<PaymentPage> {
         'SoDienThoai': widget.soDienThoai,
       };
 
-      if (widget.email.isNotEmpty) {
-        requestData['Email'] = widget.email;
-      }
-      if (widget.ghiChu.isNotEmpty) {
-        requestData['GhiChu'] = widget.ghiChu;
-      }
-
-      // 🔥 Nếu đã đăng nhập thì gửi MaKH
-      if (isLoggedIn && maKH > 0) {
-        requestData['MaKH'] = maKH;
-        print('✅ Đã đăng nhập - Gửi kèm MaKH: $maKH');
-      } else {
-        print('❌ Chưa đăng nhập - Đặt phòng với tư cách khách');
-      }
+      if (widget.email.isNotEmpty) requestData['Email'] = widget.email;
+      if (widget.ghiChu.isNotEmpty) requestData['GhiChu'] = widget.ghiChu;
+      if (isLoggedIn && maKH > 0) requestData['MaKH'] = maKH;
       if (widget.selectedKhuyenMai != null) {
         requestData['MaKM'] = widget.selectedKhuyenMai!['MaKM'];
-        print('🟢 Gửi kèm MaKM: ${widget.selectedKhuyenMai!['MaKM']}');
       }
 
       print('📝 Request đặt phòng: $requestData');
 
       // BƯỚC 1: Tạo đặt phòng
       var bookingResponse = await ApiService.post('dat-phong', requestData);
-
       print('✅ Response đặt phòng: $bookingResponse');
 
       int maDatPhong = bookingResponse['data']['datPhong']['MaDatPhong'];
       double soTienThanhToan = widget.tienDatCoc;
 
-      // BƯỚC 2: Xử lý thanh toán
+      // BƯỚC 2: Xử lý theo phương thức thanh toán
       if (selectedMethod == 1) {
-        var paymentResponse = await ApiService.post('vnpay-payment', {
-          'amount': soTienThanhToan.toInt(),
-          'dat_phong_ids': [maDatPhong],
-          'bank_code': 'VNBANK',
-          'description': "Thanh toan dat phong Peach Valley",
-        });
-
-        String? paymentUrl = paymentResponse['payment_url'];
-        String? txnRef = paymentResponse['txn_ref'];
-
-        if (paymentUrl != null && mounted) {
-          final Uri uri = Uri.parse(paymentUrl);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-            setState(() {
-              isWaitingPayment = true;
-              maDatPhongDangCho = maDatPhong;
-            });
-            _startPollingPaymentStatus(txnRef, maDatPhong);
-          } else {
-            _showError("Không thể mở VNPay");
-          }
-          return;
-        }
+        // Thanh toán VNPay - Thẻ nội địa
+        await _processVNPayPayment(maDatPhong, soTienThanhToan);
+      } else if (selectedMethod == 2) {
+        // Thanh toán ZaloPay - Mã QR
+        await _processZaloPayPayment(maDatPhong, soTienThanhToan);
       }
 
-      if (selectedMethod == 2) {
-        try {
-          await ApiService.post('dat-phong/$maDatPhong/confirm', {});
-        } catch (e) {
-          print('⚠️ Confirm booking lỗi: $e');
-        }
-        _showSuccessDialog(maDatPhong);
-      }
     } catch (e) {
       print('❌ Lỗi đặt phòng: $e');
       _showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => isProcessing = false);
     }
+  }
+  Future<void> _processVNPayPayment(int maDatPhong, double soTienThanhToan) async {
+    var paymentResponse = await ApiService.post('vnpay-payment', {
+      'amount': soTienThanhToan.toInt(),
+      'dat_phong_ids': [maDatPhong],
+      'bank_code': 'VNBANK',
+      'description': "Thanh toan dat phong Peach Valley",
+    });
+
+    String? paymentUrl = paymentResponse['payment_url'];
+    String? txnRef = paymentResponse['txn_ref'];
+
+    if (paymentUrl != null && mounted) {
+      final Uri uri = Uri.parse(paymentUrl);
+      await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      setState(() {
+        isWaitingPayment = true;
+        maDatPhongDangCho = maDatPhong;
+      });
+      _startPollingPaymentStatus(txnRef, maDatPhong);
+    }
+  }
+  Future<void> _processZaloPayPayment(int maDatPhong, double soTienThanhToan) async {
+    try {
+      var paymentResponse = await ApiService.post('zalopay-payment', {
+        'amount': soTienThanhToan.toInt(),
+        'dat_phong_ids': [maDatPhong],
+        'app_user': widget.soDienThoai,
+        'description': "Thanh toan dat phong Peach Valley",
+        'payment_type': 'deposit',
+      });
+
+      print('📱 ZaloPay Response: $paymentResponse'); // Log để debug
+
+      // ZaloPay trả về 2 dạng:
+      // - order_url: URL để mở app/web
+      // - qr_code: Chuỗi mã QR (dạng text)
+      String? orderUrl = paymentResponse['order_url'];
+      String? qrCode = paymentResponse['qr_code'];
+      String? appTransId = paymentResponse['app_trans_id'];
+
+      if (mounted) {
+        if (qrCode != null && qrCode.isNotEmpty) {
+          // Hiển thị QR code ngay trong app
+          _showZaloPayQRDialog(orderUrl ?? '', qrCode, appTransId, maDatPhong);
+        } else if (orderUrl != null && orderUrl.isNotEmpty) {
+          // Nếu có URL thì mở trình duyệt
+          final Uri uri = Uri.parse(orderUrl);
+          await launchUrl(uri, mode: LaunchMode.inAppWebView);
+          setState(() {
+            isWaitingPayment = true;
+            maDatPhongDangCho = maDatPhong;
+          });
+          _startPollingZaloPayStatus(appTransId, maDatPhong);
+        } else {
+          throw Exception('Không nhận được thông tin thanh toán từ ZaloPay');
+        }
+      }
+    } catch (e) {
+      print('❌ ZaloPay Error: $e');
+      throw Exception('Lỗi thanh toán ZaloPay: $e');
+    }
+  }
+  void _showZaloPayQRDialog(String orderUrl, String? qrCode, String? appTransId, int maDatPhong) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.qr_code_scanner, color: Color(0xFFC97A3E), size: 28),
+            SizedBox(width: 10),
+            Text("Quét mã QR để thanh toán",
+                style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,  // ✅ Quan trọng: Column co giãn theo nội dung
+          children: [
+            // ✅ Kiểm tra dữ liệu trước khi tạo QR
+            if (qrCode != null && qrCode.isNotEmpty)
+              SizedBox(
+                width: 220,  // ✅ Fix cứng chiều rộng
+                height: 220, // ✅ Fix cứng chiều cao
+                child: QrImageView(
+                  data: qrCode,
+                  version: QrVersions.auto,
+                  size: 200.0,
+                  eyeStyle: const QrEyeStyle(
+                    color: Color(0xFFC97A3E),
+                    eyeShape: QrEyeShape.square,
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    color: Color(0xFF49120F),
+                    dataModuleShape: QrDataModuleShape.square,
+                  ),
+                ),
+              )
+            else
+            // ✅ Fallback khi không có QR code
+              Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.qr_code, size: 80, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text("Không có mã QR", style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            // Số tiền
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFC97A3E).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                "${_formatTien(widget.tienDatCoc)} VND",
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFC97A3E)
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Hướng dẫn
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Mở ZaloPay → Chọn \"Quét mã\" → Quét mã QR trên màn hình",
+                      style: TextStyle(fontSize: 12, color: Colors.blue),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _showError("Hủy thanh toán");
+            },
+            child: const Text("Hủy", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+  void _startPollingZaloPayStatus(String? appTransId, int maDatPhong) {
+    int attempts = 0;
+    const maxAttempts = 180; // 6 phút
+
+    pollingTimer?.cancel();
+    pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      attempts++;
+
+      if (attempts > maxAttempts) {
+        timer.cancel();
+        if (mounted) {
+          setState(() => isWaitingPayment = false);
+          _showError("Quá thời gian chờ thanh toán. Vui lòng kiểm tra lại.");
+        }
+        return;
+      }
+
+      try {
+        var response = await ApiService.get('zalopay/check-status/$appTransId');
+        bool isPaid = response['data']?['paid'] ?? false;
+
+        if (isPaid) {
+          timer.cancel();
+          if (mounted) {
+            setState(() => isWaitingPayment = false);
+            Navigator.of(context).popUntil((route) => route.isFirst);
+            _showPaymentSuccess(maDatPhong, appTransId);
+          }
+        }
+      } catch (e) {
+        // Bỏ qua lỗi, thử lại
+      }
+    });
   }
 
   void _startPollingPaymentStatus(String? txnRef, int maDatPhong) {
@@ -238,7 +407,7 @@ class _PaymentPageState extends State<PaymentPage> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(children: [
-          Icon(Icons.check_circle, color: Colors.green, size: 28),
+          Icon(Icons.check_circle, color: Color(0xFFC97A3E), size: 28),
           SizedBox(width: 10),
           Text("Thanh toán thành công!", style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold, fontSize: 17)),
         ]),
@@ -343,7 +512,7 @@ class _PaymentPageState extends State<PaymentPage> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(children: [
-          Icon(Icons.check_circle, color: Colors.green, size: 28),
+          Icon(Icons.check_circle, color: Color(0xFFC97A3E), size: 28),
           SizedBox(width: 10),
           Text("Đặt phòng thành công!", style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold, fontSize: 17)),
         ]),
@@ -529,6 +698,23 @@ class _PaymentPageState extends State<PaymentPage> {
                 const Text("Chọn phương thức thanh toán",
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF49120F))),
                 const SizedBox(height: 12),
+                // ZaloPay - Thanh toán QR
+                _buildPaymentCard(
+                  icon: Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0066FF).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Text("Z", style: TextStyle(color: Color(0xFF0066FF), fontWeight: FontWeight.bold, fontSize: 24)),
+                    ),
+                  ),
+                  title: "Thanh toán bằng mã QR",
+                  subtitle: "Quét mã QR qua ZaloPay",
+                  value: 2,
+                ),
+
 
                 // VNPay
                 _buildPaymentCard(
@@ -543,28 +729,28 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                   ),
                   title: "Thanh toán qua thẻ nội địa ",
-                  subtitle: "VNPay",
+                  subtitle: "Thẻ ATM nội địa / Ví VNPay",
                   value: 1,
                 ),
                 const SizedBox(height: 10),
 
                 // Thanh toán sau
-                _buildPaymentCard(
-                  icon: Container(
-                    width: 48, height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFC97A3E).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.credit_card, color: Color(0xFFC97A3E), size: 28),
-                    ),
-                  ),
-                  title: "Thanh toán qua thẻ quốc tế",
-                  subtitle: "",
-                  value: 2,
-                ),
-                const SizedBox(height: 30),
+                // _buildPaymentCard(
+                //   icon: Container(
+                //     width: 48, height: 48,
+                //     decoration: BoxDecoration(
+                //       color: const Color(0xFFC97A3E).withOpacity(0.1),
+                //       borderRadius: BorderRadius.circular(12),
+                //     ),
+                //     child: const Center(
+                //       child: Icon(Icons.credit_card, color: Color(0xFFC97A3E), size: 28),
+                //     ),
+                //   ),
+                //   title: "Thanh toán qua thẻ quốc tế",
+                //   subtitle: "Visa / Mastercard / JCB",
+                //   value: 2,
+                // ),
+                // const SizedBox(height: 30),
 
                 // Nút thanh toán
                 SizedBox(
@@ -621,7 +807,7 @@ class _PaymentPageState extends State<PaymentPage> {
                       SizedBox(height: 20),
                       Text("Đang chờ thanh toán...", style: TextStyle(color: Color(0xFF49120F), fontSize: 16)),
                       SizedBox(height: 8),
-                      Text("Vui lòng hoàn tất thanh toán trên VNPay", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      Text("Vui lòng hoàn tất thanh toán ", style: TextStyle(color: Colors.grey, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -650,7 +836,7 @@ class _PaymentPageState extends State<PaymentPage> {
           if (widget.email.isNotEmpty) _infoRow("Email", widget.email),
           _infoRow("Số phòng", "${widget.selectedRooms.length} phòng • $soDem đêm"),
 
-          // 🔥 THÊM: Hiển thị mã KM nếu có
+          //  THÊM: Hiển thị mã KM nếu có
           if (widget.selectedKhuyenMai != null) ...[
             const Divider(height: 12),
             Container(
@@ -661,12 +847,12 @@ class _PaymentPageState extends State<PaymentPage> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.local_offer, color: Colors.green, size: 16),
+                  const Icon(Icons.local_offer, color: Color(0xFFC97A3E), size: 16),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Đã áp dụng: ${widget.selectedKhuyenMai!['TenKM']} (-${(widget.selectedKhuyenMai!['PhanTramGiamGia'] as num).toStringAsFixed(0)}%)',
-                      style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w500),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFFC97A3E), fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
@@ -693,44 +879,96 @@ class _PaymentPageState extends State<PaymentPage> {
     required String title,
     required String subtitle,
     required int value,
+    bool isDisabled = false,
   }) {
     bool isSelected = selectedMethod == value;
-    return GestureDetector(
-      onTap: () => setState(() => selectedMethod = value),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFC97A3E).withOpacity(0.05) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? const Color(0xFFC97A3E) : Colors.grey.shade200,
-            width: isSelected ? 2 : 1,
+
+    return Opacity(
+      opacity: isDisabled ? 0.5 : 1.0,
+      child: GestureDetector(
+        onTap: isDisabled
+            ? () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Tính năng đang bảo trì, vui lòng thử lại sau'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+            : () => setState(() => selectedMethod = value),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isSelected && !isDisabled ? const Color(0xFFC97A3E).withOpacity(0.05) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected && !isDisabled ? const Color(0xFFC97A3E) : Colors.grey.shade200,
+              width: isSelected && !isDisabled ? 2 : 1,
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            icon,
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF49120F))),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                ],
+          child: Row(
+            children: [
+              icon,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: isDisabled ? Colors.grey : const Color(0xFF49120F),
+                            ),
+                          ),
+                        ),
+                        if (isDisabled)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'Bảo trì',
+                              style: TextStyle(fontSize: 9, color: Colors.orange, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 12, color: isDisabled ? Colors.orange : Colors.grey),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Container(
-              width: 22, height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? const Color(0xFFC97A3E) : Colors.transparent,
-                border: Border.all(color: isSelected ? const Color(0xFFC97A3E) : Colors.grey.shade300, width: 2),
+              Container(
+                width: 22, height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDisabled
+                      ? Colors.grey.shade300
+                      : (isSelected ? const Color(0xFFC97A3E) : Colors.transparent),
+                  border: Border.all(
+                    color: isDisabled
+                        ? Colors.grey
+                        : (isSelected ? const Color(0xFFC97A3E) : Colors.grey.shade300),
+                    width: 2,
+                  ),
+                ),
+                child: isSelected && !isDisabled
+                    ? const Icon(Icons.check, color: Colors.white, size: 14)
+                    : null,
               ),
-              child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 14) : null,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

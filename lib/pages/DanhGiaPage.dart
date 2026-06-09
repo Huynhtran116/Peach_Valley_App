@@ -56,7 +56,7 @@ class _DanhGiaPageState extends State<DanhGiaPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result['message'] ?? 'Cảm ơn bạn đã đánh giá!'),
-          backgroundColor: Colors.green,
+          backgroundColor: Color(0xFFC97A3E),
         ),
       );
       Navigator.pop(context, true); // Trả về true để refresh

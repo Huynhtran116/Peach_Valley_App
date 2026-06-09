@@ -284,7 +284,7 @@ class _ServiceGroupDetailPageState extends State<ServiceGroupDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Lỗi: ${e.toString().replaceFirst("Exception: ", "")}'),
-          backgroundColor: Colors.red,
+          backgroundColor: Color(0xFFC97A3E),
         ),
       );
     }

@@ -383,7 +383,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Đã đăng xuất thành công'),
-        backgroundColor: Colors.green,
+        backgroundColor: Color(0xFFC97A3E),
       ),
     );
   }
@@ -1518,9 +1518,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
             ),
           ),
         );
-      } else {
-        _showRoomSelectionDialog(currentBookings, dv);
       }
+
     } catch (e) {
       _hideLoadingDialog();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1538,65 +1537,99 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Chọn đặt phòng để đặt dịch vụ',
-          style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold, fontSize: 16),
+        title: const Row(
+          children: [
+            Icon(Icons.meeting_room, color: Color(0xFFC97A3E)),
+            SizedBox(width: 8),
+            Text(
+              'Chọn phòng đặt dịch vụ',
+              style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
         ),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
             shrinkWrap: true,
-            itemCount: currentBookings.length,
+            // 🔥 Đếm tổng số phòng thay vì số booking
+            itemCount: currentBookings.fold(0, (sum, b) => sum! + ((b['phongs'] as List?)?.length ?? 0)),
             itemBuilder: (context, index) {
-              var booking = currentBookings[index];
-              int maDatPhong = booking['MaDatPhong'];
-              var phongs = booking['phongs'] ?? [];
+              // Tìm booking và phòng tương ứng với index
+              int count = 0;
+              dynamic targetBooking;
+              dynamic targetPhong;
 
-              // 🔥 Tạo chuỗi số phòng (ví dụ: "104, 105" hoặc "104")
-              String soPhongList = _getSoPhongList(phongs);
+              for (var booking in currentBookings) {
+                var phongs = booking['phongs'] as List? ?? [];
+                if (index < count + phongs.length) {
+                  targetBooking = booking;
+                  targetPhong = phongs[index - count];
+                  break;
+                }
+                count += phongs.length;
+              }
 
-              // 🔥 Tạo tiêu đề hiển thị: #94 - 104, 105
-              String title = '#$maDatPhong - $soPhongList';
+              if (targetBooking == null || targetPhong == null) {
+                return const SizedBox.shrink();
+              }
 
-              String ngayNhan = _formatDate(booking['NgayNhanPhong']);
-              String ngayTra = _formatDate(booking['NgayTraPhong']);
+              int maDatPhong = targetBooking['MaDatPhong'];
+              String soPhong = targetPhong['SoPhong']?.toString() ?? '';
+              String tenLoaiPhong = targetPhong['TenLoaiPhong']?.toString() ?? '';
+              String ngayNhan = _formatDate(targetBooking['NgayNhanPhong']);
+              String ngayTra = _formatDate(targetBooking['NgayTraPhong']);
 
-              return ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFC97A3E).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.receipt_long, color: Color(0xFFC97A3E), size: 20),
-                ),
-                title: Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Color(0xFF49120F),
-                  ),
-                ),
-                subtitle: Text(
-                  '$ngayNhan → $ngayTra',
-                  style: const TextStyle(fontSize: 12),
-                ),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFC97A3E)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ServiceOrderDetailPage(
-                        maDatPhong: maDatPhong,
-                        soPhong: soPhongList,
-                        preSelectedService: dv,
-                      ),
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                child: ListTile(
+                  leading: Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC97A3E).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  );
-                },
+                    child: const Icon(Icons.meeting_room, color: Color(0xFFC97A3E), size: 22),
+                  ),
+                  title: Row(
+                    children: [
+                      Text(
+                        'Phòng $soPhong',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF49120F)),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8BE97).withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '#$maDatPhong',
+                          style: const TextStyle(fontSize: 10, color: Color(0xFFC97A3E), fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                  subtitle: Text(
+                    '$tenLoaiPhong • $ngayNhan → $ngayTra',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFFC97A3E)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceOrderDetailPage(
+                          maDatPhong: maDatPhong,
+                          soPhong: soPhong,
+                          preSelectedService: dv,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -1604,7 +1637,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Đóng', style: TextStyle(color: Color(0xFFC97A3E), fontSize: 14)),
+            child: const Text('Đóng', style: TextStyle(color: Color(0xFFC97A3E))),
           ),
         ],
       ),
@@ -2069,7 +2102,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Điểm còn lại:'),
-                  Text('${diemHienTai - km.diem} điểm', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  Text('${diemHienTai - km.diem} điểm', style: const TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold)),
                 ],
               ),
             ] else ...[
@@ -2118,7 +2151,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(result['message'] ?? ''),
-                      backgroundColor: result['success'] == true ? Colors.green : Colors.red,
+                      backgroundColor: result['success'] == true ? Color(0xFFC97A3E) : Color(0xFF49120F),
                       behavior: SnackBarBehavior.floating,
                       duration: const Duration(seconds: 2),
                     ),
@@ -2164,7 +2197,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 24),
+              Icon(Icons.check_circle, color: Color(0xFFC97A3E), size: 24),
               SizedBox(width: 8),
               Text('Mã khuyến mãi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
@@ -2209,7 +2242,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Đã sao chép mã khuyến mãi'),
-                    backgroundColor: Colors.green,
+                    backgroundColor: Color(0xFFC97A3E),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );

@@ -150,7 +150,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(children: [
-          Icon(isSuccess ? Icons.check_circle : Icons.error, color: isSuccess ? Colors.green : const Color(0xFFC97A3E), size: 28),
+          Icon(isSuccess ? Icons.check_circle : Icons.error, color: isSuccess ? Color(0xFFC97A3E) : const Color(0xFFC97A3E), size: 28),
           const SizedBox(width: 10),
           Expanded(child: Text(title, style: const TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold, fontSize: 17))),
         ]),
@@ -503,7 +503,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Đã áp dụng mã ${result['TenKM']}'),
-                      backgroundColor: Colors.green,
+                      backgroundColor: Color(0xFFC97A3E),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -566,14 +566,14 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                 children: [
                   Text(
                     'Giảm ${(_selectedKhuyenMai!['PhanTramGiamGia'] as num).toStringAsFixed(0)}%',
-                    style: const TextStyle(fontSize: 14, color: Colors.green),
+                    style: const TextStyle(fontSize: 14, color: Color(0xFFC97A3E)),
                   ),
                   Text(
                     '-${_formatTien(tongGiaGoc - tongGia)} VND',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: Colors.green,
+                      color: Color(0xFFC97A3E),
                     ),
                   ),
                 ],

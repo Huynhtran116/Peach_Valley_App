@@ -104,7 +104,7 @@ class _SignInPageState extends State<SignInPage> {
           children: [
             Icon(
               isSuccess ? Icons.check_circle : Icons.error,
-              color: isSuccess ? Colors.green : const Color(0xFFC97A3E),
+              color: isSuccess ? Color(0xFFC97A3E) : const Color(0xFFC97A3E),
               size: 28,
             ),
             const SizedBox(width: 10),

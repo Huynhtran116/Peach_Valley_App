@@ -246,7 +246,7 @@ class _RegisterDetailPageState extends State<RegisterDetailPage> {
           children: [
             Icon(
               isSuccess ? Icons.check_circle : Icons.error,
-              color: isSuccess ? Colors.green : Colors.red,
+              color: isSuccess ? Color(0xFFC97A3E) : Color(0xFF49120F),
               size: 28,
             ),
             const SizedBox(width: 10),

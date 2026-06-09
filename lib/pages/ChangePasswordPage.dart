@@ -75,7 +75,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        backgroundColor: isError ? Color(0xFF49120F) : Color(0xFFC97A3E),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -88,8 +88,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle : true,
         title: const Text('Đổi mật khẩu',
-            style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight.bold)),
+            style: TextStyle(color: Color(0xFF49120F), fontWeight: FontWeight(600))),
         iconTheme: const IconThemeData(color: Color(0xFF49120F)),
       ),
       body: SingleChildScrollView(

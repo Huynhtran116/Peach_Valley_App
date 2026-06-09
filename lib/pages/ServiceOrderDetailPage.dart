@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../models/dich_vu.dart';
 
@@ -46,11 +47,83 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
   DateTime minDate = DateTime.now();
   DateTime maxDate = DateTime.now().add(const Duration(days: 30));
 
+  int selectedMaDatPhong = 0;
+  String selectedPhong = '';
+  int selectedMaCTDP = 0;
+  List<dynamic> bookingList = [];
+  List<dynamic> phongList = [];
+
   @override
   void initState() {
     super.initState();
     fetchDichVu();
     _loadBookingDates();
+    _loadAllBookings();
+  }
+  Future<void> _loadAllBookings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      int maKH = prefs.getInt('user_maKH') ?? 0;
+
+      var response = await ApiService.get('khach-hang/$maKH/dat-phong');
+      List allBookings = response['data'] ?? [];
+      bookingList = allBookings.where((b) => b['TinhTrang'] == 2).toList();
+
+      print('🟢 BookingList length: ${bookingList.length}');
+
+      // 🔥 SỬA: Nếu selectedMaDatPhong = 0, lấy booking đầu tiên
+      if (selectedMaDatPhong == 0 && bookingList.isNotEmpty) {
+        selectedMaDatPhong = bookingList.first['MaDatPhong'] ?? 0;
+      }
+
+      // Load phòng cho booking hiện tại
+      _loadPhongChoBooking(selectedMaDatPhong);
+    } catch (e) {
+      print('Lỗi load booking: $e');
+    }
+  }
+  void _loadPhongChoBooking(int maDatPhong) {
+    print('🟢 _loadPhongChoBooking: $maDatPhong');
+    print('🟢 bookingList: ${bookingList.length} bookings');
+
+    var booking = bookingList.firstWhere(
+          (b) => b['MaDatPhong'] == maDatPhong,
+      orElse: () => null,
+    );
+
+    print('🟢 Tìm thấy booking: ${booking != null}');
+
+    if (booking != null) {
+      phongList = booking['phongs'] as List? ?? [];
+      print('🟢 phongList length: ${phongList.length}');
+
+      if (phongList.isNotEmpty) {
+        setState(() {
+          selectedMaDatPhong = maDatPhong;
+          selectedPhong = phongList[0]['SoPhong']?.toString() ?? '';
+          selectedMaCTDP = phongList[0]['MaCTDP'] ?? 0;
+          _loadBookingDatesForBooking(maDatPhong);
+        });
+      }
+    }
+  }
+  Future<void> _loadBookingDatesForBooking(int maDatPhong) async {
+    try {
+      var response = await ApiService.get('dat-phong/$maDatPhong');
+      if (response['success'] == true && response['data'] != null) {
+        var data = response['data'];
+        DateTime checkIn = DateTime.parse(data['NgayNhanPhong']);
+        DateTime checkOut = DateTime.parse(data['NgayTraPhong']);
+        setState(() {
+          minDate = checkIn;
+          maxDate = checkOut;
+          if (selectedDate.isBefore(checkIn)) selectedDate = checkIn;
+          if (selectedDate.isAfter(checkOut)) selectedDate = checkOut;
+        });
+      }
+    } catch (e) {
+      print('Lỗi load ngày: $e');
+    }
   }
 
   Future<void> _loadBookingDates() async {
@@ -283,7 +356,7 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
         gioHang[existingIndex]['thanhTien'] = selectedDichVu!.giaDV * newSoLuong;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã cập nhật số lượng ${selectedDichVu!.tenDV}'), backgroundColor: Colors.green),
+        SnackBar(content: Text('Đã cập nhật số lượng ${selectedDichVu!.tenDV}'), backgroundColor: Color(0xFFC97A3E)),
       );
     } else {
       double thanhTien = selectedDichVu!.giaDV * soLuong;
@@ -295,7 +368,7 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
         });
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã thêm ${selectedDichVu!.tenDV} vào giỏ'), backgroundColor: Colors.green),
+        SnackBar(content: Text('Đã thêm ${selectedDichVu!.tenDV} vào giỏ'), backgroundColor: Color(0xFFC97A3E)),
       );
     }
 
@@ -420,7 +493,7 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 32),
+            Icon(Icons.check_circle, color: Color(0xFFC97A3E), size: 32),
             SizedBox(width: 10),
             Text('Đặt dịch vụ thành công!'),
           ],
@@ -434,36 +507,86 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
               const SizedBox(height: 16),
 
               // 🔥 THÔNG TIN ĐẶT PHÒNG
+
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8BE97).withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(colors: [Color(0xFF49120F), Color(0xFFC97A3E)]),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.meeting_room, size: 16, color: Color(0xFF49120F)),
-                        const SizedBox(width: 8),
-                        Text(
-                          '#${widget.maDatPhong} - Phòng ${widget.soPhong}',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                    const Text('Yêu cầu dịch vụ',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                    const SizedBox(height: 4),
+                    const Text('Hãy để chúng tôi chuẩn bị đúng dịch vụ quý khách cần.',
+                        style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    const SizedBox(height: 16),
+
+                    // 🔥 CHỌN BOOKING (nếu nhiều)
+                    if (bookingList.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _buildStyledDropdown<int>(
+                          icon: Icons.receipt_long,
+                          value: selectedMaDatPhong,
+                          items: bookingList.map((b) {
+                            String ngayNhan = _formatDate(b['NgayNhanPhong']?.toString());
+                            String ngayTra = _formatDate(b['NgayTraPhong']?.toString());
+                            return DropdownMenuItem(
+                              value: b['MaDatPhong'] as int,
+                              child: Text('Đặt phòng #${b['MaDatPhong']} ($ngayNhan → $ngayTra)',
+                                  style: const TextStyle(fontSize: 13)),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) _loadPhongChoBooking(value);
+                          },
                         ),
-                      ],
+                      ),
+
+                    // 🔥 CHỌN PHÒNG
+                    _buildStyledDropdown<String>(
+                      icon: Icons.meeting_room,
+                      value: phongList.any((p) => p['SoPhong']?.toString() == selectedPhong) ? selectedPhong : null,
+                      hint: 'Chọn phòng',
+                      items: phongList.map((p) {
+                        String soPhong = p['SoPhong']?.toString() ?? '';
+                        String tenLoai = p['TenLoaiPhong']?.toString() ?? '';
+                        return DropdownMenuItem(
+                          value: soPhong,
+                          child: Text('Phòng $soPhong - $tenLoai', style: const TextStyle(fontSize: 13)),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          for (var p in phongList) {
+                            if (p['SoPhong']?.toString() == value) {
+                              setState(() {
+                                selectedPhong = value;
+                                selectedMaCTDP = p['MaCTDP'] ?? 0;
+                              });
+                              break;
+                            }
+                          }
+                        }
+                      },
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_today, size: 16, color: Color(0xFF49120F)),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Ngày: ${_formatDate(selectedDate)} ${_formatTime(selectedTime)}',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+
+                    // Ngày lưu trú
+                    if (minDate != maxDate)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today, color: Colors.white70, size: 16),
+                            const SizedBox(width: 8),
+                            Text('Lưu trú: ${_formatDate(minDate)} → ${_formatDate(maxDate)}',
+                                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               ),
@@ -580,9 +703,77 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
       ),
     );
   }
+  // Widget dropdown style đẹp
+  Widget _buildStyledDropdown<T>({
+    required IconData icon,
+    required T? value,
+    String? hint,
+    required List<DropdownMenuItem<T>> items,
+    required Function(T?) onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<T>(
+                value: value,
+                isExpanded: true,
+                dropdownColor: Colors.white,
+                icon: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+                ),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+                hint: hint != null
+                    ? Text(hint, style: const TextStyle(color: Colors.white60, fontSize: 14))
+                    : null,
+                items: items,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  String _formatDate(DateTime date) {
-    return "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+  String _formatDate(dynamic date) {
+    if (date == null) return '';
+    try {
+      DateTime d;
+      if (date is DateTime) {
+        d = date;
+      } else {
+        d = DateTime.parse(date.toString());
+      }
+      return "${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}";
+    } catch (e) {
+      return date.toString();
+    }
   }
 
   String _formatTime(TimeOfDay time) {
@@ -647,29 +838,92 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
                     style: TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                   const SizedBox(height: 12),
+                  //
+                  if (bookingList.length > 1)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.receipt_long, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: selectedMaDatPhong,
+                                dropdownColor: const Color(0xFF49120F),
+                                icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                                items: bookingList.map<DropdownMenuItem<int>>((b) {
+                                  String ngayNhan = b['NgayNhanPhong']?.toString() ?? '';
+                                  String ngayTra = b['NgayTraPhong']?.toString() ?? '';
+                                  return DropdownMenuItem(
+                                    value: b['MaDatPhong'],
+                                    child: Text('#${b['MaDatPhong']} (${_formatDate(ngayNhan)} → ${_formatDate(ngayTra)})',
+                                        style: const TextStyle(fontSize: 12)),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {  //
+                                  if (value != null) _loadPhongChoBooking(value);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  //
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.receipt_long, color: Colors.white, size: 18),
+                        const Icon(Icons.meeting_room, color: Colors.white, size: 20),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            '#${widget.maDatPhong} - Phòng ${widget.soPhong}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: phongList.any((p) => p['SoPhong']?.toString() == selectedPhong) ? selectedPhong : null,
+                              dropdownColor: const Color(0xFF49120F),
+                              icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14),
+                              hint: const Text('Chọn phòng', style: TextStyle(color: Colors.white70)),
+                              items: phongList.map<DropdownMenuItem<String>>((p) {
+                                String soPhong = p['SoPhong']?.toString() ?? '';
+                                String tenLoai = p['TenLoaiPhong']?.toString() ?? '';
+                                return DropdownMenuItem(
+                                  value: soPhong,
+                                  child: Text('P.$soPhong - $tenLoai', style: const TextStyle(fontSize: 13)),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  for (var p in phongList) {
+                                    if (p['SoPhong']?.toString() == value) {
+                                      setState(() {
+                                        selectedPhong = value;
+                                        selectedMaCTDP = p['MaCTDP'] ?? 0;
+                                      });
+                                      break;
+                                    }
+                                  }
+                                }
+                              },
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
+                  //
+                  // Ngày lưu trú
                   if (minDate != maxDate)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
@@ -684,15 +938,14 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
                             const Icon(Icons.calendar_today, color: Colors.white70, size: 14),
                             const SizedBox(width: 6),
                             Expanded(
-                              child: Text(
-                                'Lưu trú: ${_formatDate(minDate)} → ${_formatDate(maxDate)}',
-                                style: const TextStyle(color: Colors.white70, fontSize: 12),
-                              ),
+                              child: Text('Lưu trú: ${_formatDate(minDate)} → ${_formatDate(maxDate)}',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
                             ),
                           ],
                         ),
                       ),
                     ),
+
                 ],
               ),
             ),
@@ -761,7 +1014,7 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
                                 ),
                                 Text('${_formatTien(item['thanhTien'])} VND', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFC97A3E))),
                                 const SizedBox(width: 8),
-                                GestureDetector(onTap: () => _xoaKhoiGio(index), child: const Icon(Icons.close, color: Colors.red)),
+                                GestureDetector(onTap: () => _xoaKhoiGio(index), child: const Icon(Icons.close, color: Color(0xFF49120F))),
                               ],
                             ),
                           );
@@ -838,12 +1091,12 @@ class _ServiceOrderDetailPageState extends State<ServiceOrderDetailPage> {
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.warning_amber, size: 14, color: Colors.red),
+                          Icon(Icons.warning_amber, size: 14, color: Color(0xFFC97A3E)),
                           SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               'Ngày này là ngày trả phòng. Chỉ được đặt dịch vụ trước 12:00',
-                              style: TextStyle(fontSize: 12, color: Colors.red),
+                              style: TextStyle(fontSize: 12, color: Color(0xFF49120F)),
                             ),
                           ),
                         ],

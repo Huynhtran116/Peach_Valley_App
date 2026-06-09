@@ -287,21 +287,6 @@ class _KhoKhuyenMaiPageState extends State<KhoKhuyenMaiPage>  with WidgetsBindin
                 child: Text('điểm', style: TextStyle(color: Colors.white70, fontSize: 16)),
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add_circle_outline, color: Colors.white, size: 16),
-                    SizedBox(width: 4),
-                    Text('Kiếm điểm', style: TextStyle(color: Colors.white, fontSize: 12)),
-                  ],
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 12),

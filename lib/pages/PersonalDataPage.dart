@@ -100,7 +100,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Cập nhật thông tin thành công!'),
-            backgroundColor: Colors.green,
+            backgroundColor: Color(0xFFC97A3E),
           ),
         );
         Navigator.pop(context, true);

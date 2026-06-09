@@ -128,7 +128,7 @@ class _PromotionPageState extends State<PromotionPage> with WidgetsBindingObserv
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Đã sao chép mã khuyến mãi'),
-        backgroundColor: Colors.green,
+        backgroundColor: Color(0xFFC97A3E),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
       ),
@@ -207,7 +207,7 @@ class _PromotionPageState extends State<PromotionPage> with WidgetsBindingObserv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Điểm còn lại:'),
-                  Text('${diemHienTai - km.diem} điểm', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  Text('${diemHienTai - km.diem} điểm', style: const TextStyle(color: Color(0xFFC97A3E), fontWeight: FontWeight.bold)),
                 ],
               ),
             ] else ...[
@@ -245,7 +245,7 @@ class _PromotionPageState extends State<PromotionPage> with WidgetsBindingObserv
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(result['message'] ?? ''),
-                      backgroundColor: result['success'] == true ? Colors.green : Colors.red,
+                      backgroundColor: result['success'] == true ? Color(0xFFC97A3E) : Color(0xFF49120F),
                       behavior: SnackBarBehavior.floating,
                       duration: const Duration(seconds: 2),
                     ),

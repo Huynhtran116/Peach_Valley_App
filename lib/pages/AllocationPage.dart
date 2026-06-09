@@ -485,7 +485,7 @@ class _AllocationPageState extends State<AllocationPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text("Đã xếp: $assignedGuests/$totalGuests khách",
-                  style: TextStyle(fontSize: 13, color: ratio >= 1 ? Colors.green : const Color(0xFF49120F))),
+                  style: TextStyle(fontSize: 13, color: ratio >= 1 ? Color(0xFFC97A3E) : const Color(0xFF49120F))),
               Text("Còn: $remainingRooms phòng", style: const TextStyle(fontSize: 13, color: Colors.grey)),
             ],
           ),
@@ -495,7 +495,7 @@ class _AllocationPageState extends State<AllocationPage> {
             child: LinearProgressIndicator(
               value: ratio.clamp(0.0, 1.0),
               backgroundColor: Colors.grey.shade200,
-              color: ratio >= 1 ? Colors.green : const Color(0xFFC97A3E),
+              color: ratio >= 1 ? Color(0xFFC97A3E) : const Color(0xFFC97A3E),
               minHeight: 8,
             ),
           ),
@@ -672,7 +672,7 @@ class _AllocationPageState extends State<AllocationPage> {
           children: [
             Icon(
               isSuccess ? Icons.check_circle : Icons.warning_amber,
-              color: isSuccess ? Colors.green : const Color(0xFFC97A3E),
+              color: isSuccess ? Color(0xFFC97A3E) : const Color(0xFFC97A3E),
               size: 28,
             ),
             const SizedBox(width: 10),
