@@ -21,7 +21,7 @@
 
 | Màn hình Đăng nhập | Màn hình Trang chủ | Màn hình Thanh toán |
 |:---:|:---:|:---:|
-| <img src="screenshots/login.png" width="200"> | <img src="screenshots/home.png" width="200"> | <img src="screenshots/payment.png" width="200"> |
+| <img src="screenshots/Login.png" width="200"> | <img src="screenshots/Home.png" width="200"> | <img src="screenshots/Payment.png" width="200"> |
 
 ## 📌 Người thực hiện
 - **Trần Nguyễn Như Huỳnh** - Flutter & Backend Developer
